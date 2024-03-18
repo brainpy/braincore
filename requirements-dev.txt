@@ -1,0 +1,7 @@
+numpy
+jax
+jaxlib
+
+# test requirements
+pytest
+absl-py
