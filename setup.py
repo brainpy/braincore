@@ -12,7 +12,7 @@ from setuptools import setup
 
 # version
 here = os.path.abspath(os.path.dirname(__file__))
-with open(os.path.join(here, 'brainpy.core', '__init__.py'), 'r') as f:
+with open(os.path.join(here, 'brainpy/core/', '__init__.py'), 'r') as f:
   init_py = f.read()
 version = re.search('__version__ = "(.*)"', init_py).groups()[0]
 if len(sys.argv) > 2 and sys.argv[2] == '--python-tag=py3':
@@ -31,7 +31,7 @@ packages = find_packages(exclude=['lib*', 'docs', 'tests'])
 setup(
   name='brainpy.core',
   version=version,
-  description='The Core System for General-purpose Brain Dynamics Programming',
+  description='The Core System for General-purpose Brain Dynamics Programming Framework BrainPy',
   long_description=README,
   long_description_content_type="text/markdown",
   author='BrainPy Team',

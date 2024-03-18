@@ -1,4 +1,4 @@
-from brainpy import environ
+from brainpy.core import environ
 
 __all__ = [
   'get_dtype'

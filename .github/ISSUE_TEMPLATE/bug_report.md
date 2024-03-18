@@ -10,9 +10,7 @@ Please:
 - [ ] Provide a complete example of how to reproduce the bug, wrapped in triple backticks like this:
 
 ```python
-import brainpy.math as bm
-print(bm.asarray([1, 2, 3]))
-# Array([1, 2, 3], dtype=int32)
+import brainpy.core as bc
 ```
 
 - [ ] If applicable, include full error messages/tracebacks.
