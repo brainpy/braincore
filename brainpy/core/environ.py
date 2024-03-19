@@ -13,7 +13,7 @@ from jax import config, devices, numpy as jnp
 from jax._src.typing import DTypeLike
 
 from .mixin import Mode
-from .utils import MemScaling, IdMemScaling
+from ._utils import MemScaling, IdMemScaling
 
 __all__ = [
   'set', 'context', 'get', 'all',
@@ -373,4 +373,4 @@ def tolerance():
     return jnp.array(1e-2, dtype=np.float16)
 
 
-set(dt=0.1, x64=False, precision=32, mode=Mode(), mem_scaling=IdMemScaling(), platform='cpu')
+set(dt=0.1, precision=32, mode=Mode(), mem_scaling=IdMemScaling(), platform='cpu')

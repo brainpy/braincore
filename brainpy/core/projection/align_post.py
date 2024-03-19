@@ -1,8 +1,8 @@
 from typing import Optional, Union
 
 from brainpy.core.mixin import (Mode, AllOfTypes, ParamDescriber, BindCondData, AlignPost, UpdateReturn)
-from brainpy.core.module import (register_delay_of_target, Projection, Module, Dynamics,
-                              ReceiveInputProj, ExtendedUpdateWithBA)
+from brainpy.core._module import (register_delay_of_target, Projection, Module, Dynamics,
+                                  ReceiveInputProj, ExtendedUpdateWithBA)
 from ._utils import is_instance
 
 __all__ = [

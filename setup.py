@@ -5,9 +5,10 @@ import os
 import re
 import time
 import sys
-
+import fnmatch
 from setuptools import find_packages
 from setuptools import setup
+from setuptools.command.build_py import build_py as build_py_orig
 
 
 # version
@@ -25,7 +26,9 @@ with io.open(os.path.join(here, 'README.md'), 'r', encoding='utf-8') as f:
   README = f.read()
 
 # installation packages
-packages = find_packages(exclude=['lib*', 'docs', 'tests'])
+packages = find_packages(exclude=["docs*", "tests*", "examples*", "build*",
+                                  "dist*", "brainpy.egg-info*", "brainpy/__pycache__*",
+                                  "brainpy/__init__.py"])
 
 # setup
 setup(

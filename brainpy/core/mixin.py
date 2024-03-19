@@ -31,7 +31,7 @@ __all__ = [
 def _get_state():
   global State
   if State is None:
-    from brainpy.core.state import State
+    from brainpy.core._state import State
   return State
 
 
@@ -332,7 +332,7 @@ class JointMode(Mode):
     """
     Check whether the mode is exactly the desired mode.
     """
-    return AllOfTypes[*tuple(self.types)] == cls
+    return AllOfTypes[tuple(self.types)] == cls
 
   def __getattr__(self, item):
     """
