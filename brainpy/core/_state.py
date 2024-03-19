@@ -2,7 +2,7 @@ from typing import Any, Tuple, Dict
 
 import jax
 
-from .utils import Stack
+from ._utils import Stack
 
 __all__ = [
   'State', 'ParamState', 'StateStack',
@@ -113,6 +113,15 @@ class StateStack(Stack):
           break
       else:
         results[-1][k] = v.value
+    return results
+
+  def collect_values(self) -> Dict:
+    """
+    Collect the values by the given types.
+    """
+    results = Stack()
+    for k, v in self.items():
+      results[k] = v.value
     return results
 
   def _check_elem(self, elem):
