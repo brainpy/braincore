@@ -36,14 +36,15 @@ from typing import Sequence, Any, Tuple, Union, Dict, Callable, Optional
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax._src.typing import Shape
 
 from brainpy.core import environ, share
-from .misc import get_dtype
+from .math import get_dtype
 from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
 from .state import State, StateStack
 from .utils import unique_name, Stack, jit_error, get_unique_name
 
+
+Shape = Union[int, Sequence[int]]
 PyTree = Any
 ArrayLike = jax.typing.ArrayLike
 
@@ -203,7 +204,7 @@ class Module(object):
     Examples
     --------
 
-    >>> import braincore as bc
+    >>> import brainpy.core as bc
     >>> x = bc.random.rand((10, 10))
     >>> l = bp.dnn.Activation(jax.numpy.tanh)
     >>> y = x >> l
@@ -338,7 +339,7 @@ class module_list(list):
   That is to say, any nodes that are wrapped into :py:class:`~.NodeList` will be automatically
   retieved when using :py:func:`~.nodes()` function.
 
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> l = bc.module_list([bp.dnn.Dense(1, 2),
   >>>                   bp.dnn.LSTMCell(2, 3)])
   """
@@ -682,21 +683,23 @@ class ExtendedUpdateWithBA(Module):
     """The shortcut to call ``update`` methods."""
 
     # ``before_updates``
-    for model in self.before_updates.values():
-      if hasattr(model, '_receive_update_input'):
-        model(*args, **kwargs)
-      else:
-        model()
+    if self.before_updates is not None:
+      for model in self.before_updates.values():
+        if hasattr(model, '_receive_update_input'):
+          model(*args, **kwargs)
+        else:
+          model()
 
     # update the model self
     ret = self.update(*args, **kwargs)
 
     # ``after_updates``
-    for model in self.after_updates.values():
-      if hasattr(model, '_not_receive_update_output'):
-        model()
-      else:
-        model(ret)
+    if self.after_updates is not None:
+      for model in self.after_updates.values():
+        if hasattr(model, '_not_receive_update_output'):
+          model()
+        else:
+          model(ret)
     return ret
 
 
@@ -904,7 +907,7 @@ class Sequential(Module, UpdateReturn, Container):
   Examples
   --------
 
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>>
   >>> # composing ANN models
   >>> l = bc.Sequential(bp.layers.Dense(100, 10),
@@ -1378,7 +1381,7 @@ def call_order(level: int = 0):
 
   The lower the level, the earlier the function is called.
 
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> bc.call_order(0)
   >>> bc.call_order(-1)
   >>> bc.call_order(-2)

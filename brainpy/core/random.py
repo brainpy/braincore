@@ -19,7 +19,7 @@ from jax._src.array import ArrayImpl
 from jax._src.typing import DTypeLike
 from jax.experimental.host_callback import call
 
-from brainpy.core import environ
+from . import environ
 from .state import State
 from .utils import jit_error
 
@@ -1041,7 +1041,7 @@ def randint(low, high=None, size: Optional[Size] = None, dtype=int,
 
   Examples
   --------
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> bc.random.randint(2, size=10)
   array([1, 0, 0, 0, 1, 1, 0, 0, 1, 0]) # random
   >>> bc.random.randint(1, size=10)
@@ -1124,7 +1124,7 @@ def random_integers(low,
 
   Examples
   --------
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> bc.random.random_integers(5)
   4 # random
   >>> type(bc.random.random_integers(5))
@@ -1206,7 +1206,7 @@ def randn(*dn, key: Optional[SeedOrKey] = None):
 
   Examples
   --------
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> bc.random.randn()
   2.1923875335537315  # random
 
@@ -1264,7 +1264,7 @@ def random_sample(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
 
   Examples
   --------
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> bc.random.random_sample()
   0.47108547995356098 # random
   >>> type(bc.random.random_sample())
@@ -1355,7 +1355,7 @@ def choice(a, size: Optional[Size] = None, replace=True, p=None,
   --------
   Generate a uniform random sample from np.arange(5) of size 3:
 
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> bc.random.choice(5, 3)
   array([0, 3, 4]) # random
   >>> #This is equivalent to brainpy.math.random.randint(0,5,3)
@@ -1424,7 +1424,7 @@ def permutation(x,
 
   Examples
   --------
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> bc.random.permutation(10)
   array([1, 7, 4, 3, 0, 9, 2, 5, 8, 6]) # random
 
@@ -1462,7 +1462,7 @@ def shuffle(x, axis=0, key: Optional[SeedOrKey] = None):
 
   Examples
   --------
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> arr = np.arange(10)
   >>> bc.random.shuffle(arr)
   >>> arr

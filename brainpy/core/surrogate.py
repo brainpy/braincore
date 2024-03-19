@@ -85,7 +85,7 @@ class Surrogate(object):
   Examples
   --------
 
-  >>> import braincore as bc
+  >>> import brainpy.core as bc
   >>> import jax.numpy as jnp
 
   >>> class MySurrogate(bc.surrogate.Surrogate):
@@ -172,9 +172,8 @@ def sigmoid(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-2, 2, 1000)
      >>> for alpha in [1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.sigmoid)(xs, alpha)
@@ -266,9 +265,8 @@ def piecewise_quadratic(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.piecewise_quadratic)(xs, alpha)
@@ -357,9 +355,8 @@ def piecewise_exp(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.piecewise_exp)(xs, alpha)
@@ -442,9 +439,8 @@ def soft_sign(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.soft_sign)(xs, alpha)
@@ -523,9 +519,8 @@ def arctan(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.arctan)(xs, alpha)
@@ -617,9 +612,8 @@ def nonzero_sign_log(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.nonzero_sign_log)(xs, alpha)
@@ -702,9 +696,8 @@ def erf(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.nonzero_sign_log)(xs, alpha)
@@ -805,9 +798,8 @@ def piecewise_leaky_relu(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for c in [0.01, 0.05, 0.1]:
      >>>   for w in [1., 2.]:
@@ -914,9 +906,8 @@ def squarewave_fourier_series(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for n in [2, 4, 8]:
      >>>   f = bc.surrogate.SquarewaveFourierSeries(n=n)
@@ -1011,9 +1002,8 @@ def s2nn(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> grads = bc.vector_grad(bc.surrogate.s2nn)(xs, 4., 1.)
      >>> plt.plot(xs, grads, label=r'$\alpha=4, \beta=1$')
@@ -1108,10 +1098,9 @@ def q_pseudo_spike(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.q_pseudo_spike)(xs, alpha)
      >>>   plt.plot(xs, grads, label=r'$\alpha=$' + str(alpha))
@@ -1202,10 +1191,9 @@ def leaky_relu(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> grads = bc.vector_grad(bc.surrogate.leaky_relu)(xs, 0., 1.)
      >>> plt.plot(xs, grads, label=r'$\alpha=0., \beta=1.$')
      >>> plt.legend()
@@ -1302,10 +1290,9 @@ def log_tailed_relu(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> grads = bc.vector_grad(bc.surrogate.leaky_relu)(xs, 0., 1.)
      >>> plt.plot(xs, grads, label=r'$\alpha=0., \beta=1.$')
      >>> plt.legend()
@@ -1377,10 +1364,9 @@ def relu_grad(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> for s in [0.5, 1.]:
      >>>   for w in [1, 2.]:
      >>>     grads = bc.vector_grad(bc.surrogate.relu_grad)(xs, s, w)
@@ -1455,10 +1441,9 @@ def gaussian_grad(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> for s in [0.5, 1., 2.]:
      >>>   grads = bc.vector_grad(bc.surrogate.gaussian_grad)(xs, s, 0.5)
      >>>   plt.plot(xs, grads, label=r'$\alpha=0.5, \sigma=$' + str(s))
@@ -1546,10 +1531,9 @@ def multi_gaussian_grad(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> grads = bc.vector_grad(bc.surrogate.multi_gaussian_grad)(xs)
      >>> plt.plot(xs, grads)
      >>> plt.show()
@@ -1624,7 +1608,7 @@ def inv_square_grad(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-1, 1, 1000)
      >>> for alpha in [1., 10., 100.]:
@@ -1693,9 +1677,8 @@ def slayer_grad(
   .. plot::
      :include-source: True
 
-     >>> import braincore as bc
+     >>> import brainpy.core as bc
      >>> import matplotlib.pyplot as plt
-     >>> bp.visualize.get_figure(1, 1, 4, 6)
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
      >>>   grads = bc.vector_grad(bc.surrogate.slayer_grad)(xs, alpha)

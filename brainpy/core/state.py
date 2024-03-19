@@ -115,6 +115,15 @@ class StateStack(Stack):
         results[-1][k] = v.value
     return results
 
+  def collect_values(self) -> Dict:
+    """
+    Collect the values by the given types.
+    """
+    results = Stack()
+    for k, v in self.items():
+      results[k] = v.value
+    return results
+
   def _check_elem(self, elem):
     assert isinstance(elem, State), f'must be instance of {State}'
 
