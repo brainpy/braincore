@@ -1265,7 +1265,7 @@ class Delay(ExtendedUpdateWithBA, ParamDesc):
     indices = (delay_idx,) + indices
 
     # the delay data
-    return jax.tree.map(lambda a: a[*indices], self.history.value)
+    return jax.tree.map(lambda a: a[indices], self.history.value)
 
   def update(self, current: PyTree) -> None:
     """

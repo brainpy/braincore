@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from typing_extensions import Unpack
+
 from typing import Sequence, Optional, TypeVar, Any
 from typing import (_SpecialForm, _type_check, _remove_dups_flatten, _UnionGenericAlias)
 
@@ -332,7 +334,7 @@ class JointMode(Mode):
     """
     Check whether the mode is exactly the desired mode.
     """
-    return AllOfTypes[*tuple(self.types)] == cls
+    return AllOfTypes[tuple(self.types)] == cls
 
   def __getattr__(self, item):
     """
