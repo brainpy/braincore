@@ -2,7 +2,7 @@
 The core system for the next-generation BrainPy framework.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .projection import *
 from ._module import *
