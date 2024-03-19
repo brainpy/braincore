@@ -3,13 +3,11 @@
 import io
 import os
 import re
-import time
 import sys
-import fnmatch
+import time
+
 from setuptools import find_packages
 from setuptools import setup
-from setuptools.command.build_py import build_py as build_py_orig
-
 
 # version
 here = os.path.abspath(os.path.dirname(__file__))
