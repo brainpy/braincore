@@ -20,8 +20,8 @@ from jax._src.typing import DTypeLike
 from jax.experimental.host_callback import call
 
 from . import environ
-from .state import State
-from .utils import jit_error
+from ._state import State
+from ._utils import jit_error
 
 Size = Union[int, Sequence[int]]
 SeedOrKey = Union[int, jax.Array, np.ndarray]

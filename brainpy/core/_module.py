@@ -40,8 +40,8 @@ import numpy as np
 from brainpy.core import environ, share
 from .math import get_dtype
 from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
-from .state import State, StateStack
-from .utils import unique_name, Stack, jit_error, get_unique_name
+from ._state import State, StateStack
+from ._utils import unique_name, Stack, jit_error, get_unique_name
 
 
 Shape = Union[int, Sequence[int]]

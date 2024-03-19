@@ -2,7 +2,7 @@ from typing import Any, Tuple, Dict
 
 import jax
 
-from .utils import Stack
+from ._utils import Stack
 
 __all__ = [
   'State', 'ParamState', 'StateStack',

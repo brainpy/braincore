@@ -15,3 +15,4 @@ from .delta import __all__ as delta_all
 from .vanilla import __all__ as vanilla_all
 
 __all__ = align_post_all + align_pre_all + delta_all + vanilla_all
+del align_post_all, align_pre_all, delta_all, vanilla_all

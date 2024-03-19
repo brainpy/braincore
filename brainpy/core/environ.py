@@ -13,7 +13,7 @@ from jax import config, devices, numpy as jnp
 from jax._src.typing import DTypeLike
 
 from .mixin import Mode
-from .utils import MemScaling, IdMemScaling
+from ._utils import MemScaling, IdMemScaling
 
 __all__ = [
   'set', 'context', 'get', 'all',

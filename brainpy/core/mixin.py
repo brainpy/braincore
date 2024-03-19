@@ -31,7 +31,7 @@ __all__ = [
 def _get_state():
   global State
   if State is None:
-    from brainpy.core.state import State
+    from brainpy.core._state import State
   return State
 
 
