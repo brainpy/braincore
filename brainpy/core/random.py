@@ -87,7 +87,6 @@ class RandomState(State):
 
   @value.setter
   def value(self, value):
-    # self.__check_value(value)
     self._value = value
 
   # ------------------- #
@@ -144,8 +143,9 @@ class RandomState(State):
   # random functions #
   # ---------------- #
 
-  def rand(self, *dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = float):
+  def rand(self, *dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
+    dtype = dtype or environ.dftype()
     r = jr.uniform(key, shape=dn, minval=0., maxval=1., dtype=dtype)
     return r
 
@@ -154,7 +154,7 @@ class RandomState(State):
       low,
       high=None,
       size: Optional[Size] = None,
-      dtype: DTypeLike = int,
+      dtype: DTypeLike = None,
       key: Optional[SeedOrKey] = None
   ):
     if high is None:
@@ -166,6 +166,7 @@ class RandomState(State):
       size = lax.broadcast_shapes(jnp.shape(low),
                                   jnp.shape(high))
     key = self.split_key() if key is None else _formalize_key(key)
+    dtype = dtype or environ.ditype()
     r = jr.randint(key,
                    shape=_size2shape(size),
                    minval=low, maxval=high, dtype=dtype)
@@ -177,7 +178,7 @@ class RandomState(State):
       high=None,
       size: Optional[Size] = None,
       key: Optional[SeedOrKey] = None,
-      dtype: DTypeLike = int,
+      dtype: DTypeLike = None,
   ):
     low = _check_py_seq(low)
     high = _check_py_seq(high)
@@ -188,6 +189,7 @@ class RandomState(State):
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(low), jnp.shape(high))
     key = self.split_key() if key is None else _formalize_key(key)
+    dtype = dtype or environ.ditype()
     r = jr.randint(key,
                    shape=_size2shape(size),
                    minval=low,
@@ -195,33 +197,47 @@ class RandomState(State):
                    dtype=dtype)
     return r
 
-  def randn(self, *dn, key: Optional[SeedOrKey] = None):
+  def randn(self, *dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.normal(key, shape=dn)
+    dtype = dtype or environ.dftype()
+    r = jr.normal(key, shape=dn, dtype=dtype)
     return r
 
   def random(self,
              size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
+    dtype = dtype or environ.dftype()
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.uniform(key, shape=_size2shape(size), minval=0., maxval=1.)
+    r = jr.uniform(key, shape=_size2shape(size), minval=0., maxval=1., dtype=dtype)
     return r
 
   def random_sample(self,
                     size: Optional[Size] = None,
-                    key: Optional[SeedOrKey] = None):
-    r = self.random(size=size, key=key)
+                    key: Optional[SeedOrKey] = None,
+                    dtype: DTypeLike = None):
+    r = self.random(size=size, key=key, dtype=dtype)
     return r
 
-  def ranf(self, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
-    r = self.random(size=size, key=key)
+  def ranf(self,
+           size: Optional[Size] = None,
+           key: Optional[SeedOrKey] = None,
+           dtype: DTypeLike = None):
+    r = self.random(size=size, key=key, dtype=dtype)
     return r
 
-  def sample(self, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
-    r = self.random(size=size, key=key)
+  def sample(self,
+             size: Optional[Size] = None,
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
+    r = self.random(size=size, key=key, dtype=dtype)
     return r
 
-  def choice(self, a, size: Optional[Size] = None, replace=True, p=None,
+  def choice(self,
+             a,
+             size: Optional[Size] = None,
+             replace=True,
+             p=None,
              key: Optional[SeedOrKey] = None):
     a = _check_py_seq(a)
     p = _check_py_seq(p)
@@ -229,167 +245,222 @@ class RandomState(State):
     r = jr.choice(key, a=a, shape=_size2shape(size), replace=replace, p=p)
     return r
 
-  def permutation(self, x, axis: int = 0, independent: bool = False, key: Optional[SeedOrKey] = None):
+  def permutation(self,
+                  x,
+                  axis: int = 0,
+                  independent: bool = False,
+                  key: Optional[SeedOrKey] = None):
     x = _check_py_seq(x)
     key = self.split_key() if key is None else _formalize_key(key)
     r = jr.permutation(key, x, axis=axis, independent=independent)
     return r
 
-  def shuffle(self, x, axis=0, key: Optional[SeedOrKey] = None):
+  def shuffle(self,
+              x,
+              axis=0,
+              key: Optional[SeedOrKey] = None):
     key = self.split_key() if key is None else _formalize_key(key)
     x = jr.permutation(key, x, axis=axis)
     return x
 
-  def beta(self, a, b,
+  def beta(self,
+           a,
+           b,
            size: Optional[Size] = None,
-           key: Optional[SeedOrKey] = None):
+           key: Optional[SeedOrKey] = None,
+           dtype: DTypeLike = None):
     a = _check_py_seq(a)
     b = _check_py_seq(b)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(a), jnp.shape(b))
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.beta(key, a=a, b=b, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.beta(key, a=a, b=b, shape=_size2shape(size),dtype=dtype)
     return r
 
-  def exponential(self, scale=None,
+  def exponential(self,
+                  scale=None,
                   size: Optional[Size] = None,
-                  key: Optional[SeedOrKey] = None):
+                  key: Optional[SeedOrKey] = None,
+                  dtype: DTypeLike = None):
     if size is None:
       size = jnp.shape(scale)
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.exponential(key, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    scale = jnp.asarray(scale, dtype=dtype)
+    r = jr.exponential(key, shape=_size2shape(size), dtype=dtype)
     if scale is not None:
       r = r / scale
     return r
 
-  def gamma(self, shape, scale=None,
+  def gamma(self,
+            shape,
+            scale=None,
             size: Optional[Size] = None,
-            key: Optional[SeedOrKey] = None):
+            key: Optional[SeedOrKey] = None,
+            dtype: DTypeLike = None):
     shape = _check_py_seq(shape)
     scale = _check_py_seq(scale)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(shape), jnp.shape(scale))
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.gamma(key, a=shape, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.gamma(key, a=shape, shape=_size2shape(size), dtype=dtype)
     if scale is not None:
       r = r * scale
     return r
 
-  def gumbel(self, loc=None, scale=None,
+  def gumbel(self,
+             loc=None,
+             scale=None,
              size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
     loc = _check_py_seq(loc)
     scale = _check_py_seq(scale)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(loc), jnp.shape(scale))
     key = self.split_key() if key is None else _formalize_key(key)
-    r = _loc_scale(loc, scale, jr.gumbel(key, shape=_size2shape(size)))
+    dtype = dtype or environ.dftype()
+    r = _loc_scale(loc, scale, jr.gumbel(key, shape=_size2shape(size), dtype=dtype))
     return r
 
-  def laplace(self, loc=None, scale=None,
+  def laplace(self,
+              loc=None,
+              scale=None,
               size: Optional[Size] = None,
-              key: Optional[SeedOrKey] = None):
+              key: Optional[SeedOrKey] = None,
+              dtype: DTypeLike = None):
     loc = _check_py_seq(loc)
     scale = _check_py_seq(scale)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(loc), jnp.shape(scale))
     key = self.split_key() if key is None else _formalize_key(key)
-    r = _loc_scale(loc, scale, jr.laplace(key, shape=_size2shape(size)))
+    dtype = dtype or environ.dftype()
+    r = _loc_scale(loc, scale, jr.laplace(key, shape=_size2shape(size), dtype=dtype))
     return r
 
-  def logistic(self, loc=None, scale=None,
+  def logistic(self,
+               loc=None,
+               scale=None,
                size: Optional[Size] = None,
-               key: Optional[SeedOrKey] = None):
+               key: Optional[SeedOrKey] = None,
+               dtype: DTypeLike = None):
     loc = _check_py_seq(loc)
     scale = _check_py_seq(scale)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(loc), jnp.shape(scale))
     key = self.split_key() if key is None else _formalize_key(key)
-    r = _loc_scale(loc, scale, jr.logistic(key, shape=_size2shape(size)))
+    dtype = dtype or environ.dftype()
+    r = _loc_scale(loc, scale, jr.logistic(key, shape=_size2shape(size), dtype=dtype))
     return r
 
-  def normal(self, loc=None, scale=None,
+  def normal(self,
+             loc=None,
+             scale=None,
              size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
     loc = _check_py_seq(loc)
     scale = _check_py_seq(scale)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(scale), jnp.shape(loc))
     key = self.split_key() if key is None else _formalize_key(key)
-    r = _loc_scale(loc, scale, jr.normal(key, shape=_size2shape(size)))
+    dtype = dtype or environ.dftype()
+    r = _loc_scale(loc, scale, jr.normal(key, shape=_size2shape(size),  dtype=dtype))
     return r
 
-  def pareto(self, a,
+  def pareto(self,
+             a,
              size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
     if size is None:
       size = jnp.shape(a)
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.pareto(key, b=a, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    a = jnp.asarray(a, dtype=dtype)
+    r = jr.pareto(key, b=a, shape=_size2shape(size), dtype=dtype)
     return r
 
   def poisson(self,
               lam=1.0,
               size: Optional[Size] = None,
-              key: Optional[SeedOrKey] = None):
+              key: Optional[SeedOrKey] = None,
+              dtype: DTypeLike = None):
     lam = _check_py_seq(lam)
     if size is None:
       size = jnp.shape(lam)
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.poisson(key, lam=lam, shape=_size2shape(size))
+    dtype = dtype or environ.ditype()
+    r = jr.poisson(key, lam=lam, shape=_size2shape(size),  dtype=dtype)
     return r
 
   def standard_cauchy(self,
                       size: Optional[Size] = None,
-                      key: Optional[SeedOrKey] = None):
+                      key: Optional[SeedOrKey] = None,
+                      dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.cauchy(key, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.cauchy(key, shape=_size2shape(size), dtype=dtype)
     return r
 
   def standard_exponential(self,
                            size: Optional[Size] = None,
-                           key: Optional[SeedOrKey] = None):
+                           key: Optional[SeedOrKey] = None,
+                           dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.exponential(key, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.exponential(key, shape=_size2shape(size), dtype=dtype)
     return r
 
   def standard_gamma(self,
                      shape,
                      size: Optional[Size] = None,
-                     key: Optional[SeedOrKey] = None):
+                     key: Optional[SeedOrKey] = None,
+                     dtype: DTypeLike = None):
     shape = _check_py_seq(shape)
     if size is None:
       size = jnp.shape(shape)
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.gamma(key, a=shape, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.gamma(key, a=shape, shape=_size2shape(size), dtype=dtype)
     return r
 
   def standard_normal(self,
                       size: Optional[Size] = None,
-                      key: Optional[SeedOrKey] = None):
+                      key: Optional[SeedOrKey] = None,
+                      dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.normal(key, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.normal(key, shape=_size2shape(size), dtype=dtype)
     return r
 
   def standard_t(self, df,
                  size: Optional[Size] = None,
-                 key: Optional[SeedOrKey] = None):
+                 key: Optional[SeedOrKey] = None,
+                 dtype: DTypeLike = None):
     df = _check_py_seq(df)
     if size is None:
       size = jnp.shape(size)
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.t(key, df=df, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.t(key, df=df, shape=_size2shape(size), dtype=dtype)
     return r
 
-  def uniform(self, low=0.0, high=1.0,
+  def uniform(self,
+              low=0.0,
+              high=1.0,
               size: Optional[Size] = None,
-              key: Optional[SeedOrKey] = None):
+              key: Optional[SeedOrKey] = None,
+              dtype: DTypeLike = None):
     low = _check_py_seq(low)
     high = _check_py_seq(high)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(low), jnp.shape(high))
     key = self.split_key() if key is None else _formalize_key(key)
-    r = jr.uniform(key, shape=_size2shape(size), minval=low, maxval=high)
+    dtype = dtype or environ.dftype()
+    r = jr.uniform(key, shape=_size2shape(size), minval=low, maxval=high, dtype=dtype)
     return r
 
   def __norm_cdf(self, x, sqrt2, dtype):
@@ -403,13 +474,14 @@ class RandomState(State):
       size: Optional[Size] = None,
       loc=0.,
       scale=1.,
-      dtype=float,
-      key: Optional[SeedOrKey] = None
+      key: Optional[SeedOrKey] = None,
+      dtype: DTypeLike = None
   ):
     lower = _check_py_seq(lower)
     upper = _check_py_seq(upper)
     loc = _check_py_seq(loc)
     scale = _check_py_seq(scale)
+    dtype = dtype or environ.dftype()
 
     lower = lax.convert_element_type(lower, dtype)
     upper = lax.convert_element_type(upper, dtype)
@@ -458,7 +530,9 @@ class RandomState(State):
   def _check_p(self, p):
     raise ValueError(f'Parameter p should be within [0, 1], but we got {p}')
 
-  def bernoulli(self, p, size: Optional[Size] = None,
+  def bernoulli(self,
+                p,
+                size: Optional[Size] = None,
                 key: Optional[SeedOrKey] = None):
     p = _check_py_seq(p)
     jit_error(jnp.any(jnp.logical_and(p < 0, p > 1)), self._check_p, p)
@@ -468,21 +542,30 @@ class RandomState(State):
     r = jr.bernoulli(key, p=p, shape=_size2shape(size))
     return r
 
-  def lognormal(self, mean=None, sigma=None, size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+  def lognormal(self,
+                mean=None,
+                sigma=None,
+                size: Optional[Size] = None,
+                key: Optional[SeedOrKey] = None,
+                dtype: DTypeLike = None):
     mean = _check_py_seq(mean)
     sigma = _check_py_seq(sigma)
     if size is None:
       size = jnp.broadcast_shapes(jnp.shape(mean),
                                   jnp.shape(sigma))
     key = self.split_key() if key is None else _formalize_key(key)
-    samples = jr.normal(key, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    samples = jr.normal(key, shape=_size2shape(size), dtype=dtype)
     samples = _loc_scale(mean, sigma, samples)
     samples = jnp.exp(samples)
     return samples
 
-  def binomial(self, n, p, size: Optional[Size] = None,
-               key: Optional[SeedOrKey] = None):
+  def binomial(self,
+               n,
+               p,
+               size: Optional[Size] = None,
+               key: Optional[SeedOrKey] = None,
+               dtype: DTypeLike = None):
     n = _check_py_seq(n)
     p = _check_py_seq(p)
     jit_error(jnp.any(jnp.logical_and(p < 0, p > 1)), self._check_p, p)
@@ -490,45 +573,62 @@ class RandomState(State):
       size = jnp.broadcast_shapes(jnp.shape(n), jnp.shape(p))
     key = self.split_key() if key is None else _formalize_key(key)
     r = _binomial(key, p, n, shape=_size2shape(size))
-    return r
+    dtype = dtype or environ.ditype()
+    return jnp.asarray(r, dtype=dtype)
 
-  def chisquare(self, df, size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+  def chisquare(self,
+                df,
+                size: Optional[Size] = None,
+                key: Optional[SeedOrKey] = None,
+                dtype: DTypeLike = None):
     df = _check_py_seq(df)
     key = self.split_key() if key is None else _formalize_key(key)
+    dtype = dtype or environ.dftype()
     if size is None:
       if jnp.ndim(df) == 0:
-        dist = jr.normal(key, (df,)) ** 2
+        dist = jr.normal(key, (df,), dtype=dtype) ** 2
         dist = dist.sum()
       else:
         raise NotImplementedError('Do not support non-scale "df" when "size" is None')
     else:
-      dist = jr.normal(key, (df,) + _size2shape(size)) ** 2
+      dist = jr.normal(key, (df,) + _size2shape(size), dtype=dtype) ** 2
       dist = dist.sum(axis=0)
     return dist
 
-  def dirichlet(self, alpha, size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+  def dirichlet(self,
+                alpha,
+                size: Optional[Size] = None,
+                key: Optional[SeedOrKey] = None,
+                dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
     alpha = _check_py_seq(alpha)
-    r = jr.dirichlet(key, alpha=alpha, shape=_size2shape(size))
+    dtype = dtype or environ.dftype()
+    r = jr.dirichlet(key, alpha=alpha, shape=_size2shape(size), dtype=dtype)
     return r
 
-  def geometric(self, p, size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+  def geometric(self,
+                p,
+                size: Optional[Size] = None,
+                key: Optional[SeedOrKey] = None,
+                dtype: DTypeLike = None):
     p = _check_py_seq(p)
     if size is None:
       size = jnp.shape(p)
     key = self.split_key() if key is None else _formalize_key(key)
-    u = jr.uniform(key, size)
+    dtype = dtype or environ.dftype()
+    u = jr.uniform(key, size, dtype=dtype)
     r = jnp.floor(jnp.log1p(-u) / jnp.log1p(-p))
     return r
 
   def _check_p2(self, p):
     raise ValueError(f'We require `sum(pvals[:-1]) <= 1`. But we got {p}')
 
-  def multinomial(self, n, pvals, size: Optional[Size] = None,
-                  key: Optional[SeedOrKey] = None):
+  def multinomial(self,
+                  n,
+                  pvals,
+                  size: Optional[Size] = None,
+                  key: Optional[SeedOrKey] = None,
+                  dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
     n = _check_py_seq(n)
     pvals = _check_py_seq(pvals)
@@ -539,14 +639,21 @@ class RandomState(State):
     n_max = int(np.max(jax.device_get(n)))
     batch_shape = lax.broadcast_shapes(jnp.shape(pvals)[:-1], jnp.shape(n))
     r = _multinomial(key, pvals, n, n_max, batch_shape + size)
-    return r
+    dtype = dtype or environ.ditype()
+    return jnp.asarray(r, dtype=dtype)
 
-  def multivariate_normal(self, mean, cov, size: Optional[Size] = None, method: str = 'cholesky',
-                          key: Optional[SeedOrKey] = None):
+  def multivariate_normal(self,
+                          mean,
+                          cov,
+                          size: Optional[Size] = None,
+                          method: str = 'cholesky',
+                          key: Optional[SeedOrKey] = None,
+                          dtype: DTypeLike = None):
     if method not in {'svd', 'eigh', 'cholesky'}:
       raise ValueError("method must be one of {'svd', 'eigh', 'cholesky'}")
-    mean = _check_py_seq(mean)
-    cov = _check_py_seq(cov)
+    dtype = dtype or environ.dftype()
+    mean = jnp.asarray(_check_py_seq(mean), dtype=dtype)
+    cov = jnp.asarray(_check_py_seq(cov), dtype=dtype)
     key = self.split_key() if key is None else _formalize_key(key)
 
     if not jnp.ndim(mean) >= 1:
@@ -571,42 +678,55 @@ class RandomState(State):
       factor = v * jnp.sqrt(w[..., None, :])
     else:  # 'cholesky'
       factor = jnp.linalg.cholesky(cov)
-    normal_samples = jr.normal(key, size + mean.shape[-1:])
+    normal_samples = jr.normal(key, size + mean.shape[-1:], dtype=dtype)
     r = mean + jnp.einsum('...ij,...j->...i', factor, normal_samples)
     return r
 
-  def rayleigh(self, scale=1.0, size: Optional[Size] = None,
-               key: Optional[SeedOrKey] = None):
+  def rayleigh(self,
+               scale=1.0,
+               size: Optional[Size] = None,
+               key: Optional[SeedOrKey] = None,
+               dtype: DTypeLike = None):
     scale = _check_py_seq(scale)
     if size is None:
       size = jnp.shape(scale)
     key = self.split_key() if key is None else _formalize_key(key)
-    x = jnp.sqrt(-2. * jnp.log(jr.uniform(key, shape=_size2shape(size), minval=0, maxval=1)))
+    dtype = dtype or environ.dftype()
+    x = jnp.sqrt(-2. * jnp.log(jr.uniform(key, shape=_size2shape(size), minval=0, maxval=1, dtype=dtype)))
     r = x * scale
     return r
 
-  def triangular(self, size: Optional[Size] = None,
+  def triangular(self,
+                 size: Optional[Size] = None,
                  key: Optional[SeedOrKey] = None):
     key = self.split_key() if key is None else _formalize_key(key)
     bernoulli_samples = jr.bernoulli(key, p=0.5, shape=_size2shape(size))
     r = 2 * bernoulli_samples - 1
     return r
 
-  def vonmises(self, mu, kappa, size: Optional[Size] = None,
-               key: Optional[SeedOrKey] = None):
+  def vonmises(self,
+               mu,
+               kappa,
+               size: Optional[Size] = None,
+               key: Optional[SeedOrKey] = None,
+               dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
-    mu = _check_py_seq(mu)
-    kappa = _check_py_seq(kappa)
+    dtype = dtype or environ.dftype()
+    mu = jnp.asarray(_check_py_seq(mu), dtype=dtype)
+    kappa = jnp.asarray(_check_py_seq(kappa), dtype=dtype)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(mu), jnp.shape(kappa))
     size = _size2shape(size)
-    samples = _von_mises_centered(key, kappa, size)
+    samples = _von_mises_centered(key, kappa, size, dtype=dtype)
     samples = samples + mu
     samples = (samples + jnp.pi) % (2.0 * jnp.pi) - jnp.pi
     return samples
 
-  def weibull(self, a, size: Optional[Size] = None,
-              key: Optional[SeedOrKey] = None):
+  def weibull(self,
+              a,
+              size: Optional[Size] = None,
+              key: Optional[SeedOrKey] = None,
+              dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
     a = _check_py_seq(a)
     if size is None:
@@ -615,13 +735,17 @@ class RandomState(State):
       if jnp.size(a) > 1:
         raise ValueError(f'"a" should be a scalar when "size" is provided. But we got {a}')
     size = _size2shape(size)
-    random_uniform = jr.uniform(key=key, shape=size, minval=0, maxval=1)
+    dtype = dtype or environ.dftype()
+    random_uniform = jr.uniform(key=key, shape=size, minval=0, maxval=1, dtype=dtype)
     r = jnp.power(-jnp.log1p(-random_uniform), 1.0 / a)
     return r
 
-  def weibull_min(self, a, scale=None,
+  def weibull_min(self,
+                  a,
+                  scale=None,
                   size: Optional[Size] = None,
-                  key: Optional[SeedOrKey] = None):
+                  key: Optional[SeedOrKey] = None,
+                  dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
     a = _check_py_seq(a)
     scale = _check_py_seq(scale)
@@ -631,21 +755,30 @@ class RandomState(State):
       if jnp.size(a) > 1:
         raise ValueError(f'"a" should be a scalar when "size" is provided. But we got {a}')
     size = _size2shape(size)
-    random_uniform = jr.uniform(key=key, shape=size, minval=0, maxval=1)
+    dtype = dtype or environ.dftype()
+    random_uniform = jr.uniform(key=key, shape=size, minval=0, maxval=1, dtype=dtype)
     r = jnp.power(-jnp.log1p(-random_uniform), 1.0 / a)
     if scale is not None:
       r /= scale
     return r
 
-  def maxwell(self, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+  def maxwell(self,
+              size: Optional[Size] = None,
+              key: Optional[SeedOrKey] = None,
+              dtype: DTypeLike = None):
     key = self.split_key() if key is None else _formalize_key(key)
     shape = core.canonicalize_shape(_size2shape(size)) + (3,)
-    norm_rvs = jr.normal(key=key, shape=shape)
+    dtype = dtype or environ.dftype()
+    norm_rvs = jr.normal(key=key, shape=shape, dtype=dtype)
     r = jnp.linalg.norm(norm_rvs, axis=-1)
     return r
 
-  def negative_binomial(self, n, p, size: Optional[Size] = None,
-                        key: Optional[SeedOrKey] = None):
+  def negative_binomial(self,
+                        n,
+                        p,
+                        size: Optional[Size] = None,
+                        key: Optional[SeedOrKey] = None,
+                        dtype: DTypeLike = None):
     n = _check_py_seq(n)
     p = _check_py_seq(p)
     if size is None:
@@ -656,20 +789,25 @@ class RandomState(State):
       keys = self.split_keys(2)
     else:
       keys = jr.split(_formalize_key(key), 2)
-    rate = self.gamma(shape=n, scale=jnp.exp(-logits), size=size, key=keys[0])
-    r = self.poisson(lam=rate, key=keys[1])
+    rate = self.gamma(shape=n, scale=jnp.exp(-logits), size=size, key=keys[0], dtype=environ.dftype())
+    r = self.poisson(lam=rate, key=keys[1], dtype=dtype or environ.ditype())
     return r
 
-  def wald(self, mean, scale, size: Optional[Size] = None,
-           key: Optional[SeedOrKey] = None):
+  def wald(self,
+           mean,
+           scale,
+           size: Optional[Size] = None,
+           key: Optional[SeedOrKey] = None,
+           dtype: DTypeLike = None):
+    dtype = dtype or environ.dftype()
     key = self.split_key() if key is None else _formalize_key(key)
-    mean = _check_py_seq(mean)
-    scale = _check_py_seq(scale)
+    mean = jnp.asarray(_check_py_seq(mean), dtype=dtype)
+    scale = jnp.asarray(_check_py_seq(scale), dtype=dtype)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(mean), jnp.shape(scale))
     size = _size2shape(size)
     sampled_chi2 = jnp.square(self.randn(*size))
-    sampled_uniform = self.uniform(size=size, key=key)
+    sampled_uniform = self.uniform(size=size, key=key, dtype=dtype)
     # Wikipedia defines an intermediate x with the formula
     #   x = loc + loc ** 2 * y / (2 * conc) - loc / (2 * conc) * sqrt(4 * loc * conc * y + loc ** 2 * y ** 2)
     # where y ~ N(0, 1)**2 (sampled_chi2 above) and conc is the concentration.
@@ -701,8 +839,13 @@ class RandomState(State):
                     jnp.square(mean) / sampled)
     return res
 
-  def t(self, df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
-    df = _check_py_seq(df)
+  def t(self,
+        df,
+        size: Optional[Size] = None,
+        key: Optional[SeedOrKey] = None,
+        dtype: DTypeLike = None):
+    dtype = dtype or environ.dftype()
+    df = jnp.asarray(_check_py_seq(df), dtype=dtype)
     if size is None:
       size = np.shape(df)
     else:
@@ -712,29 +855,38 @@ class RandomState(State):
       keys = self.split_keys(2)
     else:
       keys = jr.split(_formalize_key(key), 2)
-    n = jr.normal(keys[0], size)
+    n = jr.normal(keys[0], size, dtype=dtype)
     two = _const(n, 2)
     half_df = lax.div(df, two)
-    g = jr.gamma(keys[1], half_df, size)
+    g = jr.gamma(keys[1], half_df, size, dtype=dtype)
     r = n * jnp.sqrt(half_df / g)
     return r
 
-  def orthogonal(self, n: int, size: Optional[Size] = None,
-                 key: Optional[SeedOrKey] = None):
+  def orthogonal(self,
+                 n: int,
+                 size: Optional[Size] = None,
+                 key: Optional[SeedOrKey] = None,
+                 dtype: DTypeLike = None):
+    dtype = dtype or environ.dftype()
     key = self.split_key() if key is None else _formalize_key(key)
     size = _size2shape(size)
     _check_shape("orthogonal", size)
     n = core.concrete_or_error(index, n, "The error occurred in jax.random.orthogonal()")
-    z = jr.normal(key, size + (n, n))
+    z = jr.normal(key, size + (n, n), dtype=dtype)
     q, r = jnp.linalg.qr(z)
     d = jnp.diagonal(r, 0, -2, -1)
     r = q * jnp.expand_dims(d / abs(d), -2)
     return r
 
-  def noncentral_chisquare(self, df, nonc, size: Optional[Size] = None,
-                           key: Optional[SeedOrKey] = None):
-    df = _check_py_seq(df)
-    nonc = _check_py_seq(nonc)
+  def noncentral_chisquare(self,
+                           df,
+                           nonc,
+                           size: Optional[Size] = None,
+                           key: Optional[SeedOrKey] = None,
+                           dtype: DTypeLike = None):
+    dtype = dtype or environ.dftype()
+    df = jnp.asarray(_check_py_seq(df), dtype=dtype)
+    nonc = jnp.asarray(_check_py_seq(nonc), dtype=dtype)
     if size is None:
       size = lax.broadcast_shapes(jnp.shape(df), jnp.shape(nonc))
     size = _size2shape(size)
@@ -742,24 +894,31 @@ class RandomState(State):
       keys = self.split_keys(3)
     else:
       keys = jr.split(_formalize_key(key), 3)
-    i = jr.poisson(keys[0], 0.5 * nonc, shape=size)
-    n = jr.normal(keys[1], shape=size) + jnp.sqrt(nonc)
+    i = jr.poisson(keys[0], 0.5 * nonc, shape=size, dtype=environ.ditype())
+    n = jr.normal(keys[1], shape=size, dtype=dtype) + jnp.sqrt(nonc)
     cond = jnp.greater(df, 1.0)
     df2 = jnp.where(cond, df - 1.0, df + 2.0 * i)
-    chi2 = 2.0 * jr.gamma(keys[2], 0.5 * df2, shape=size)
+    chi2 = 2.0 * jr.gamma(keys[2], 0.5 * df2, shape=size, dtype=dtype)
     r = jnp.where(cond, chi2 + n * n, chi2)
     return r
 
-  def loggamma(self, a, size: Optional[Size] = None,
-               key: Optional[SeedOrKey] = None):
+  def loggamma(self,
+               a,
+               size: Optional[Size] = None,
+               key: Optional[SeedOrKey] = None,
+               dtype: DTypeLike = None):
+    dtype = dtype or environ.dftype()
     key = self.split_key() if key is None else _formalize_key(key)
     a = _check_py_seq(a)
     if size is None:
       size = jnp.shape(a)
-    r = jr.loggamma(key, a, shape=_size2shape(size))
+    r = jr.loggamma(key, a, shape=_size2shape(size), dtype=dtype)
     return r
 
-  def categorical(self, logits, axis: int = -1, size: Optional[Size] = None,
+  def categorical(self,
+                  logits,
+                  axis: int = -1,
+                  size: Optional[Size] = None,
                   key: Optional[SeedOrKey] = None):
     key = self.split_key() if key is None else _formalize_key(key)
     logits = _check_py_seq(logits)
@@ -769,36 +928,48 @@ class RandomState(State):
     r = jr.categorical(key, logits, axis=axis, shape=_size2shape(size))
     return r
 
-  def zipf(self, a, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+  def zipf(self,
+           a,
+           size: Optional[Size] = None,
+           key: Optional[SeedOrKey] = None,
+           dtype: DTypeLike = None):
     a = _check_py_seq(a)
     if size is None:
       size = jnp.shape(a)
-    dtype = jax.dtypes.canonicalize_dtype(jnp.int_)
+    dtype = dtype or environ.ditype()
     r = call(lambda x: np.random.zipf(x, size).astype(dtype),
              a,
              result_shape=jax.ShapeDtypeStruct(size, dtype))
     return r
 
-  def power(self, a, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+  def power(self,
+            a,
+            size: Optional[Size] = None,
+            key: Optional[SeedOrKey] = None,
+            dtype: DTypeLike = None):
     a = _check_py_seq(a)
     if size is None:
       size = jnp.shape(a)
     size = _size2shape(size)
-    dtype = jax.dtypes.canonicalize_dtype(jnp.float_)
+    dtype = dtype or environ.dftype()
     r = call(lambda a: np.random.power(a=a, size=size).astype(dtype),
              a,
              result_shape=jax.ShapeDtypeStruct(size, dtype))
     return r
 
-  def f(self, dfnum, dfden, size: Optional[Size] = None,
-        key: Optional[SeedOrKey] = None):
+  def f(self,
+        dfnum,
+        dfden,
+        size: Optional[Size] = None,
+        key: Optional[SeedOrKey] = None,
+        dtype: DTypeLike = None):
     dfnum = _check_py_seq(dfnum)
     dfden = _check_py_seq(dfden)
     if size is None:
       size = jnp.broadcast_shapes(jnp.shape(dfnum), jnp.shape(dfden))
     size = _size2shape(size)
     d = {'dfnum': dfnum, 'dfden': dfden}
-    dtype = jax.dtypes.canonicalize_dtype(jnp.float_)
+    dtype = dtype or environ.dftype()
     r = call(lambda x: np.random.f(dfnum=x['dfnum'],
                                    dfden=x['dfden'],
                                    size=size).astype(dtype),
@@ -807,8 +978,13 @@ class RandomState(State):
     return r
 
   def hypergeometric(
-      self, ngood, nbad, nsample, size: Optional[Size] = None,
-      key: Optional[SeedOrKey] = None
+      self,
+      ngood,
+      nbad,
+      nsample,
+      size: Optional[Size] = None,
+      key: Optional[SeedOrKey] = None,
+      dtype: DTypeLike = None
   ):
     ngood = _check_py_seq(ngood)
     nbad = _check_py_seq(nbad)
@@ -819,7 +995,7 @@ class RandomState(State):
                                   jnp.shape(nbad),
                                   jnp.shape(nsample))
     size = _size2shape(size)
-    dtype = jax.dtypes.canonicalize_dtype(jnp.int_)
+    dtype = dtype or environ.ditype()
     d = {'ngood': ngood, 'nbad': nbad, 'nsample': nsample}
     r = call(lambda d: np.random.hypergeometric(ngood=d['ngood'],
                                                 nbad=d['nbad'],
@@ -829,20 +1005,28 @@ class RandomState(State):
              result_shape=jax.ShapeDtypeStruct(size, dtype))
     return r
 
-  def logseries(self, p, size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+  def logseries(self,
+                p,
+                size: Optional[Size] = None,
+                key: Optional[SeedOrKey] = None,
+                dtype: DTypeLike = None):
     p = _check_py_seq(p)
     if size is None:
       size = jnp.shape(p)
     size = _size2shape(size)
-    dtype = jax.dtypes.canonicalize_dtype(jnp.int_)
+    dtype = dtype or environ.ditype()
     r = call(lambda p: np.random.logseries(p=p, size=size).astype(dtype),
              p,
              result_shape=jax.ShapeDtypeStruct(size, dtype))
     return r
 
-  def noncentral_f(self, dfnum, dfden, nonc, size: Optional[Size] = None,
-                   key: Optional[SeedOrKey] = None):
+  def noncentral_f(self,
+                   dfnum,
+                   dfden,
+                   nonc,
+                   size: Optional[Size] = None,
+                   key: Optional[SeedOrKey] = None,
+                   dtype: DTypeLike = None):
     dfnum = _check_py_seq(dfnum)
     dfden = _check_py_seq(dfden)
     nonc = _check_py_seq(nonc)
@@ -852,7 +1036,7 @@ class RandomState(State):
                                   jnp.shape(nonc))
     size = _size2shape(size)
     d = {'dfnum': dfnum, 'dfden': dfden, 'nonc': nonc}
-    dtype = jax.dtypes.canonicalize_dtype(jnp.float_)
+    dtype = dtype or environ.dftype()
     r = call(lambda x: np.random.noncentral_f(dfnum=x['dfnum'],
                                               dfden=x['dfden'],
                                               nonc=x['nonc'],
@@ -959,7 +1143,7 @@ def seed(seed: int = None):
   DEFAULT.seed(seed)
 
 
-def rand(*dn, key: Optional[SeedOrKey] = None):
+def rand(*dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""Random values in a given shape.
 
   .. note::
@@ -977,6 +1161,9 @@ def rand(*dn, key: Optional[SeedOrKey] = None):
   d0, d1, ..., dn : int, optional
       The dimensions of the returned array, must be non-negative.
       If no argument is given a single Python float is returned.
+  dtype : dtype, optional
+      Desired dtype of the result. Byteorder must be native.
+      The default value is float.
 
   Returns
   -------
@@ -994,11 +1181,12 @@ def rand(*dn, key: Optional[SeedOrKey] = None):
          [ 0.37601032,  0.25528411],  #random
          [ 0.49313049,  0.94909878]]) #random
   """
-  return DEFAULT.rand(*dn, key=key)
+  return DEFAULT.rand(*dn, key=key, dtype=dtype)
 
 
-def randint(low, high=None, size: Optional[Size] = None, dtype=int,
-            key: Optional[SeedOrKey] = None):
+def randint(low, high=None, size: Optional[Size] = None,
+            key: Optional[SeedOrKey] = None,
+            dtype: DTypeLike = None):
   r"""Return random integers from `low` (inclusive) to `high` (exclusive).
 
   Return random integers from the "discrete uniform" distribution of
@@ -1025,6 +1213,9 @@ def randint(low, high=None, size: Optional[Size] = None, dtype=int,
   key : PRNGKey, optional
       The key for the random number generator. If not given, the
       default random number generator is used.
+  dtype : dtype, optional
+      Desired dtype of the result. Byteorder must be native.
+      The default value is int.
 
   Returns
   -------
@@ -1076,7 +1267,8 @@ def randint(low, high=None, size: Optional[Size] = None, dtype=int,
 def random_integers(low,
                     high=None,
                     size: Optional[Size] = None,
-                    key: Optional[SeedOrKey] = None):
+                    key: Optional[SeedOrKey] = None,
+                    dtype: DTypeLike = None):
   r"""
   Random integers of type `np.int_` between `low` and `high`, inclusive.
 
@@ -1149,15 +1341,15 @@ def random_integers(low,
 
   Display results as a histogram:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(dsums, 11, density=True)
   >>> plt.show()
   """
 
-  return DEFAULT.random_integers(low, high=high, size=size, key=key)
+  return DEFAULT.random_integers(low, high=high, size=size, key=key, dtype=dtype)
 
 
-def randn(*dn, key: Optional[SeedOrKey] = None):
+def randn(*dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Return a sample (or samples) from the "standard normal" distribution.
 
@@ -1217,18 +1409,18 @@ def randn(*dn, key: Optional[SeedOrKey] = None):
          [ 0.39924804,  4.68456316,  4.99394529,  4.84057254]])  # random
   """
 
-  return DEFAULT.randn(*dn, key=key)
+  return DEFAULT.randn(*dn, key=key, dtype=dtype)
 
 
-def random(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def random(size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Return random floats in the half-open interval [0.0, 1.0). Alias for
   `random_sample` to ease forward-porting to the new random API.
   """
-  return DEFAULT.random(size, key=key)
+  return DEFAULT.random(size, key=key, dtype=dtype)
 
 
-def random_sample(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def random_sample(size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Return random floats in the half-open interval [0.0, 1.0).
 
@@ -1279,23 +1471,23 @@ def random_sample(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
          [-2.99091858, -0.79479508],
          [-1.23204345, -1.75224494]])
   """
-  return DEFAULT.random_sample(size, key=key)
+  return DEFAULT.random_sample(size, key=key, dtype=dtype)
 
 
-def ranf(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def ranf(size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   This is an alias of `random_sample`. See `random_sample`  for the complete
   documentation.
   """
-  return DEFAULT.ranf(size, key=key)
+  return DEFAULT.ranf(size, key=key, dtype=dtype)
 
 
-def sample(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def sample(size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   """
   This is an alias of `random_sample`. See `random_sample`  for the complete
   documentation.
   """
-  return DEFAULT.sample(size, key=key)
+  return DEFAULT.sample(size, key=key, dtype=dtype)
 
 
 def choice(a, size: Optional[Size] = None, replace=True, p=None,
@@ -1480,7 +1672,7 @@ def shuffle(x, axis=0, key: Optional[SeedOrKey] = None):
   DEFAULT.shuffle(x, axis, key=key)
 
 
-def beta(a, b, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def beta(a, b, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a Beta distribution.
 
@@ -1518,11 +1710,12 @@ def beta(a, b, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
   out : ndarray or scalar
       Drawn samples from the parameterized beta distribution.
   """
-  return DEFAULT.beta(a, b, size=size, key=key)
+  return DEFAULT.beta(a, b, size=size, key=key, dtype=dtype)
 
 
 def exponential(scale=None, size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+                key: Optional[SeedOrKey] = None,
+                dtype: DTypeLike = None):
   r"""
   Draw samples from an exponential distribution.
 
@@ -1568,11 +1761,12 @@ def exponential(scale=None, size: Optional[Size] = None,
   .. [3] Wikipedia, "Exponential distribution",
          https://en.wikipedia.org/wiki/Exponential_distribution
   """
-  return DEFAULT.exponential(scale, size, key=key)
+  return DEFAULT.exponential(scale, size, key=key, dtype=dtype)
 
 
 def gamma(shape, scale=None, size: Optional[Size] = None,
-          key: Optional[SeedOrKey] = None):
+          key: Optional[SeedOrKey] = None,
+          dtype: DTypeLike = None):
   r"""
   Draw samples from a Gamma distribution.
 
@@ -1624,11 +1818,12 @@ def gamma(shape, scale=None, size: Optional[Size] = None,
          https://en.wikipedia.org/wiki/Gamma_distribution
 
   """
-  return DEFAULT.gamma(shape, scale, size=size, key=key)
+  return DEFAULT.gamma(shape, scale, size=size, key=key, dtype=dtype)
 
 
 def gumbel(loc=None, scale=None, size: Optional[Size] = None,
-           key: Optional[SeedOrKey] = None):
+           key: Optional[SeedOrKey] = None,
+           dtype: DTypeLike = None):
   r"""
   Draw samples from a Gumbel distribution.
 
@@ -1697,11 +1892,12 @@ def gumbel(loc=None, scale=None, size: Optional[Size] = None,
          Values from Insurance, Finance, Hydrology and Other Fields,"
          Basel: Birkhauser Verlag, 2001.
   """
-  return DEFAULT.gumbel(loc, scale, size=size, key=key)
+  return DEFAULT.gumbel(loc, scale, size=size, key=key, dtype=dtype)
 
 
 def laplace(loc=None, scale=None, size: Optional[Size] = None,
-            key: Optional[SeedOrKey] = None):
+            key: Optional[SeedOrKey] = None,
+            dtype: DTypeLike = None):
   r"""
   Draw samples from the Laplace or double exponential distribution with
   specified location (or mean) and scale (decay).
@@ -1769,7 +1965,7 @@ def laplace(loc=None, scale=None, size: Optional[Size] = None,
   Display the histogram of the samples, along with
   the probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa  # noqa
   >>> count, bins, ignored = plt.hist(s, 30, density=True)
   >>> x = np.arange(-8., 8., .01)
   >>> pdf = np.exp(-abs(x-loc)/scale)/(2.*scale)
@@ -1781,11 +1977,12 @@ def laplace(loc=None, scale=None, size: Optional[Size] = None,
   ...      np.exp(-(x - loc)**2 / (2 * scale**2)))
   >>> plt.plot(x,g)
   """
-  return DEFAULT.laplace(loc, scale, size, key=key)
+  return DEFAULT.laplace(loc, scale, size, key=key, dtype=dtype)
 
 
 def logistic(loc=None, scale=None, size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
   r"""
   Draw samples from a logistic distribution.
 
@@ -1844,7 +2041,7 @@ def logistic(loc=None, scale=None, size: Optional[Size] = None,
 
   >>> loc, scale = 10, 1
   >>> s = bc.random.logistic(loc, scale, 10000)
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s, bins=50)
 
   #   plot against distribution
@@ -1855,11 +2052,12 @@ def logistic(loc=None, scale=None, size: Optional[Size] = None,
   >>> plt.plot(bins, lgst_val * count.max() / lgst_val.max())
   >>> plt.show()
   """
-  return DEFAULT.logistic(loc, scale, size, key=key)
+  return DEFAULT.logistic(loc, scale, size, key=key, dtype=dtype)
 
 
 def normal(loc=None, scale=None, size: Optional[Size] = None,
-           key: Optional[SeedOrKey] = None):
+           key: Optional[SeedOrKey] = None,
+           dtype: DTypeLike = None):
   r"""
   Draw random samples from a normal (Gaussian) distribution.
 
@@ -1937,7 +2135,7 @@ def normal(loc=None, scale=None, size: Optional[Size] = None,
   Display the histogram of the samples, along with
   the probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s, 30, density=True)
   >>> plt.plot(bins, 1/(sigma * np.sqrt(2 * np.pi)) *
   ...                np.exp( - (bins - mu)**2 / (2 * sigma**2) ),
@@ -1951,10 +2149,10 @@ def normal(loc=None, scale=None, size: Optional[Size] = None,
   array([[-4.49401501,  4.00950034, -1.81814867,  7.29718677],   # random
          [ 0.39924804,  4.68456316,  4.99394529,  4.84057254]])  # random
   """
-  return DEFAULT.normal(loc, scale, size, key=key)
+  return DEFAULT.normal(loc, scale, size, key=key, dtype=dtype)
 
 
-def pareto(a, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def pareto(a, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a Pareto II or Lomax distribution with
   specified shape.
@@ -2040,16 +2238,16 @@ def pareto(a, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
   Display the histogram of the samples, along with the probability
   density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, _ = plt.hist(s, 100, density=True)
   >>> fit = a*m**a / bins**(a+1)
   >>> plt.plot(bins, max(count)*fit/max(fit), linewidth=2, color='r')
   >>> plt.show()
   """
-  return DEFAULT.pareto(a, size, key=key)
+  return DEFAULT.pareto(a, size, key=key, dtype=dtype)
 
 
-def poisson(lam=1.0, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def poisson(lam=1.0, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a Poisson distribution.
 
@@ -2108,7 +2306,7 @@ def poisson(lam=1.0, size: Optional[Size] = None, key: Optional[SeedOrKey] = Non
 
   Display histogram of the sample:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s, 14, density=True)
   >>> plt.show()
 
@@ -2116,10 +2314,10 @@ def poisson(lam=1.0, size: Optional[Size] = None, key: Optional[SeedOrKey] = Non
 
   >>> s = bc.random.poisson(lam=(100., 500.), size=(100, 2))
   """
-  return DEFAULT.poisson(lam, size, key=key)
+  return DEFAULT.poisson(lam, size, key=key, dtype=dtype)
 
 
-def standard_cauchy(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def standard_cauchy(size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a standard Cauchy distribution with mode = 0.
 
@@ -2175,17 +2373,18 @@ def standard_cauchy(size: Optional[Size] = None, key: Optional[SeedOrKey] = None
   --------
   Draw samples and plot the distribution:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> s = bc.random.standard_cauchy(1000000)
   >>> s = s[(s>-25) & (s<25)]  # truncate distribution so it plots well
   >>> plt.hist(s, bins=100)
   >>> plt.show()
   """
-  return DEFAULT.standard_cauchy(size, key=key)
+  return DEFAULT.standard_cauchy(size, key=key, dtype=dtype)
 
 
 def standard_exponential(size: Optional[Size] = None,
-                         key: Optional[SeedOrKey] = None):
+                         key: Optional[SeedOrKey] = None,
+                         dtype: DTypeLike = None):
   r"""
   Draw samples from the standard exponential distribution.
 
@@ -2213,11 +2412,12 @@ def standard_exponential(size: Optional[Size] = None,
 
   >>> n = bc.random.standard_exponential((3, 8000))
   """
-  return DEFAULT.standard_exponential(size, key=key)
+  return DEFAULT.standard_exponential(size, key=key, dtype=dtype)
 
 
 def standard_gamma(shape, size: Optional[Size] = None,
-                   key: Optional[SeedOrKey] = None):
+                   key: Optional[SeedOrKey] = None,
+                   dtype: DTypeLike = None):
   r"""
   Draw samples from a standard Gamma distribution.
 
@@ -2278,7 +2478,7 @@ def standard_gamma(shape, size: Optional[Size] = None,
   Display the histogram of the samples, along with
   the probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> import scipy.special as sps  # doctest: +SKIP
   >>> count, bins, ignored = plt.hist(s, 50, density=True)
   >>> y = bins**(shape-1) * ((np.exp(-bins/scale))/  # doctest: +SKIP
@@ -2286,10 +2486,10 @@ def standard_gamma(shape, size: Optional[Size] = None,
   >>> plt.plot(bins, y, linewidth=2, color='r')  # doctest: +SKIP
   >>> plt.show()
   """
-  return DEFAULT.standard_gamma(shape, size, key=key)
+  return DEFAULT.standard_gamma(shape, size, key=key, dtype=dtype)
 
 
-def standard_normal(size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def standard_normal(size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a standard Normal distribution (mean=0, stdev=1).
 
@@ -2345,10 +2545,10 @@ def standard_normal(size: Optional[Size] = None, key: Optional[SeedOrKey] = None
   array([[-4.49401501,  4.00950034, -1.81814867,  7.29718677],   # random
          [ 0.39924804,  4.68456316,  4.99394529,  4.84057254]])  # random
   """
-  return DEFAULT.standard_normal(size, key=key)
+  return DEFAULT.standard_normal(size, key=key, dtype=dtype)
 
 
-def standard_t(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def standard_t(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a standard Student's t distribution with `df` degrees
   of freedom.
@@ -2431,7 +2631,7 @@ def standard_t(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None)
   We draw 1000000 samples from Student's t distribution with the adequate
   degrees of freedom.
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> s = bc.random.standard_t(10, size=1000000)
   >>> h = plt.hist(s, bins=100, density=True)
 
@@ -2448,11 +2648,11 @@ def standard_t(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None)
   conditionally on the null hypothesis being true is too low, and we reject
   the null hypothesis of no deviation.
   """
-  return DEFAULT.standard_t(df, size, key=key)
+  return DEFAULT.standard_t(df, size, key=key, dtype=dtype)
 
 
 def uniform(low=0.0, high=1.0, size: Optional[Size] = None,
-            key: Optional[SeedOrKey] = None):
+            key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a uniform distribution.
 
@@ -2534,16 +2734,16 @@ def uniform(low=0.0, high=1.0, size: Optional[Size] = None,
   Display the histogram of the samples, along with the
   probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s, 15, density=True)
   >>> plt.plot(bins, np.ones_like(bins), linewidth=2, color='r')
   >>> plt.show()
   """
-  return DEFAULT.uniform(low, high, size, key=key)
+  return DEFAULT.uniform(low, high, size, key=key, dtype=dtype)
 
 
-def truncated_normal(lower, upper, size: Optional[Size] = None, loc=0., scale=1., dtype=float,
-                     key: Optional[SeedOrKey] = None):
+def truncated_normal(lower, upper, size: Optional[Size] = None, loc=0., scale=1.,
+                     key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""Sample truncated standard normal random values with given shape and dtype.
 
   Method based on https://people.sc.fsu.edu/~jburkardt/presentations/truncated_normal.pdf
@@ -2599,7 +2799,7 @@ def truncated_normal(lower, upper, size: Optional[Size] = None, loc=0., scale=1.
     ``shape`` is not None, or else by broadcasting ``lower`` and ``upper``.
     Returns values in the open interval ``(lower, upper)``.
   """
-  return DEFAULT.truncated_normal(lower, upper, size, loc, scale, dtype=dtype, key=key)
+  return DEFAULT.truncated_normal(lower, upper, size, loc, scale, key=key, dtype=dtype)
 
 
 RandomState.truncated_normal.__doc__ = truncated_normal.__doc__
@@ -2632,7 +2832,7 @@ def bernoulli(p=0.5, size: Optional[Size] = None, key: Optional[SeedOrKey] = Non
 
 
 def lognormal(mean=None, sigma=None, size: Optional[Size] = None,
-              key: Optional[SeedOrKey] = None):
+              key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a log-normal distribution.
 
@@ -2703,7 +2903,7 @@ def lognormal(mean=None, sigma=None, size: Optional[Size] = None,
   Display the histogram of the samples, along with
   the probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s, 100, density=True, align='mid')
 
   >>> x = np.linspace(min(bins), max(bins), 10000)
@@ -2737,10 +2937,10 @@ def lognormal(mean=None, sigma=None, size: Optional[Size] = None,
   >>> plt.plot(x, pdf, color='r', linewidth=2)
   >>> plt.show()
   """
-  return DEFAULT.lognormal(mean, sigma, size, key=key)
+  return DEFAULT.lognormal(mean, sigma, size, key=key, dtype=dtype)
 
 
-def binomial(n, p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def binomial(n, p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a binomial distribution.
 
@@ -2825,10 +3025,10 @@ def binomial(n, p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None)
   >>> sum(bc.random.binomial(9, 0.1, 20000) == 0)/20000.
   # answer = 0.38885, or 38%.
   """
-  return DEFAULT.binomial(n, p, size, key=key)
+  return DEFAULT.binomial(n, p, size, key=key, dtype=dtype)
 
 
-def chisquare(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def chisquare(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a chi-square distribution.
 
@@ -2891,10 +3091,10 @@ def chisquare(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
   >>> bc.random.chisquare(2,4)
   array([ 1.89920014,  9.00867716,  3.13710533,  5.62318272]) # random
   """
-  return DEFAULT.chisquare(df, size, key=key)
+  return DEFAULT.chisquare(df, size, key=key, dtype=dtype)
 
 
-def dirichlet(alpha, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def dirichlet(alpha, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from the Dirichlet distribution.
 
@@ -2965,16 +3165,16 @@ def dirichlet(alpha, size: Optional[Size] = None, key: Optional[SeedOrKey] = Non
 
   >>> s = bc.random.dirichlet((10, 5, 3), 20).transpose()
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> plt.barh(range(20), s[0])
   >>> plt.barh(range(20), s[1], left=s[0], color='g')
   >>> plt.barh(range(20), s[2], left=s[0]+s[1], color='r')
   >>> plt.title("Lengths of Strings")
   """
-  return DEFAULT.dirichlet(alpha, size, key=key)
+  return DEFAULT.dirichlet(alpha, size, key=key, dtype=dtype)
 
 
-def geometric(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def geometric(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from the geometric distribution.
 
@@ -3020,10 +3220,10 @@ def geometric(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
   >>> (z == 1).sum() / 10000.
   0.34889999999999999 #random
   """
-  return DEFAULT.geometric(p, size, key=key)
+  return DEFAULT.geometric(p, size, key=key, dtype=dtype)
 
 
-def f(dfnum, dfden, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def f(dfnum, dfden, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from an F distribution.
 
@@ -3106,11 +3306,11 @@ def f(dfnum, dfden, size: Optional[Size] = None, key: Optional[SeedOrKey] = None
   the measured value is 36, so the null hypothesis is rejected at the 1%
   level.
   """
-  return DEFAULT.f(dfnum, dfden, size, key=key)
+  return DEFAULT.f(dfnum, dfden, size, key=key, dtype=dtype)
 
 
 def hypergeometric(ngood, nbad, nsample, size: Optional[Size] = None,
-                   key: Optional[SeedOrKey] = None):
+                   key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a Hypergeometric distribution.
 
@@ -3189,7 +3389,7 @@ def hypergeometric(ngood, nbad, nsample, size: Optional[Size] = None,
   >>> ngood, nbad, nsamp = 100, 2, 10
   # number of good, number of bad, and number of samples
   >>> s = bc.random.hypergeometric(ngood, nbad, nsamp, 1000)
-  >>> from matplotlib.pyplot import hist
+  >>> from matplotlib.pyplot import hist  # noqa
   >>> hist(s)
   #   note that it is very unlikely to grab both bad items
 
@@ -3201,10 +3401,10 @@ def hypergeometric(ngood, nbad, nsample, size: Optional[Size] = None,
   >>> sum(s>=12)/100000. + sum(s<=3)/100000.
   #   answer = 0.003 ... pretty unlikely!
   """
-  return DEFAULT.hypergeometric(ngood, nbad, nsample, size, key=key)
+  return DEFAULT.hypergeometric(ngood, nbad, nsample, size, key=key, dtype=dtype)
 
 
-def logseries(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
+def logseries(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a logarithmic series distribution.
 
@@ -3268,7 +3468,7 @@ def logseries(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
 
   >>> a = .6
   >>> s = bc.random.logseries(a, 10000)
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s)
 
   #   plot against distribution
@@ -3279,11 +3479,11 @@ def logseries(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None):
   ...          logseries(bins, a).max(), 'r')
   >>> plt.show()
   """
-  return DEFAULT.logseries(p, size, key=key)
+  return DEFAULT.logseries(p, size, key=key, dtype=dtype)
 
 
 def multinomial(n, pvals, size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+                key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a multinomial distribution.
 
@@ -3359,11 +3559,11 @@ def multinomial(n, pvals, size: Optional[Size] = None,
   Traceback (most recent call last):
   ValueError: pvals < 0, pvals > 1 or pvals contains NaNs
   """
-  return DEFAULT.multinomial(n, pvals, size, key=key)
+  return DEFAULT.multinomial(n, pvals, size, key=key, dtype=dtype)
 
 
 def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'cholesky',
-                        key: Optional[SeedOrKey] = None):
+                        key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw random samples from a multivariate normal distribution.
 
@@ -3430,7 +3630,7 @@ def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'c
 
   Diagonal covariance means that points are oriented along x or y-axis:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> x, y = bc.random.multivariate_normal(mean, cov, 5000).T
   >>> plt.plot(x, y, 'x')
   >>> plt.axis('equal')
@@ -3479,17 +3679,17 @@ def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'c
   of the point cloud illustrates the negative correlation of the
   components of this sample.
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> plt.plot(pts[:, 0], pts[:, 1], '.', alpha=0.5)
   >>> plt.axis('equal')
   >>> plt.grid()
   >>> plt.show()
   """
-  return DEFAULT.multivariate_normal(mean, cov, size, method, key=key)
+  return DEFAULT.multivariate_normal(mean, cov, size, method, key=key, dtype=dtype)
 
 
 def negative_binomial(n, p, size: Optional[Size] = None,
-                      key: Optional[SeedOrKey] = None):
+                      key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a negative binomial distribution.
 
@@ -3560,11 +3760,11 @@ def negative_binomial(n, p, size: Optional[Size] = None,
   ...    probability = sum(s<i) / 100000.
   ...    print(i, "wells drilled, probability of one success =", probability)
   """
-  return DEFAULT.negative_binomial(n, p, size, key=key)
+  return DEFAULT.negative_binomial(n, p, size, key=key, dtype=dtype)
 
 
 def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
-                         key: Optional[SeedOrKey] = None):
+                         key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from a noncentral chi-square distribution.
 
@@ -3611,7 +3811,7 @@ def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
   --------
   Draw values from the distribution and plot the histogram
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> values = plt.hist(bc.random.noncentral_chisquare(3, 20, 100000),
   ...                   bins=200, density=True)
   >>> plt.show()
@@ -3635,11 +3835,11 @@ def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
   ...                   bins=200, density=True)
   >>> plt.show()
   """
-  return DEFAULT.noncentral_chisquare(df, nonc, size, key=key)
+  return DEFAULT.noncentral_chisquare(df, nonc, size, key=key, dtype=dtype)
 
 
 def noncentral_f(dfnum, dfden, nonc, size: Optional[Size] = None,
-                 key: Optional[SeedOrKey] = None):
+                 key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   r"""
   Draw samples from the noncentral F distribution.
 
@@ -3703,17 +3903,18 @@ def noncentral_f(dfnum, dfden, nonc, size: Optional[Size] = None,
   >>> NF = np.histogram(nc_vals, bins=50, density=True)
   >>> c_vals = bc.random.f(dfnum, dfden, 1000000)
   >>> F = np.histogram(c_vals, bins=50, density=True)
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> plt.plot(F[1][1:], F[0])
   >>> plt.plot(NF[1][1:], NF[0])
   >>> plt.show()
   """
-  return DEFAULT.noncentral_f(dfnum, dfden, nonc, size, key=key)
+  return DEFAULT.noncentral_f(dfnum, dfden, nonc, size, key=key, dtype=dtype)
 
 
 def power(a,
           size: Optional[Size] = None,
-          key: Optional[SeedOrKey] = None):
+          key: Optional[SeedOrKey] = None,
+          dtype: DTypeLike = None):
   r"""
   Draws samples in [0, 1] from a power distribution with positive
   exponent a - 1.
@@ -3777,7 +3978,7 @@ def power(a,
   Display the histogram of the samples, along with
   the probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s, bins=30)
   >>> x = np.linspace(0, 1, 100)
   >>> y = a*x**(a-1.)
@@ -3808,12 +4009,13 @@ def power(a,
   >>> plt.plot(xx,powpdf,'r-')  # doctest: +SKIP
   >>> plt.title('inverse of stats.pareto(5)')
   """
-  return DEFAULT.power(a, size, key=key)
+  return DEFAULT.power(a, size, key=key, dtype=dtype)
 
 
 def rayleigh(scale=1.0,
              size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
   r"""
   Draw samples from a Rayleigh distribution.
 
@@ -3860,7 +4062,7 @@ def rayleigh(scale=1.0,
   --------
   Draw values from the distribution and plot the histogram
 
-  >>> from matplotlib.pyplot import hist
+  >>> from matplotlib.pyplot import hist  # noqa
   >>> values = hist(bc.random.rayleigh(3, 100000), bins=200, density=True)
 
   Wave heights tend to follow a Rayleigh distribution. If the mean wave
@@ -3876,7 +4078,7 @@ def rayleigh(scale=1.0,
   >>> 100.*sum(s>3)/1000000.
   0.087300000000000003 # random
   """
-  return DEFAULT.rayleigh(scale, size, key=key)
+  return DEFAULT.rayleigh(scale, size, key=key, dtype=dtype)
 
 
 def triangular(size: Optional[Size] = None,
@@ -3931,7 +4133,7 @@ def triangular(size: Optional[Size] = None,
   --------
   Draw values from the distribution and plot the histogram:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> h = plt.hist(bc.random.triangular(-3, 0, 8, 100000), bins=200,
   ...              density=True)
   >>> plt.show()
@@ -3942,7 +4144,8 @@ def triangular(size: Optional[Size] = None,
 def vonmises(mu,
              kappa,
              size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
   r"""
   Draw samples from a von Mises distribution.
 
@@ -4012,7 +4215,7 @@ def vonmises(mu,
   Display the histogram of the samples, along with
   the probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> from scipy.special import i0  # doctest: +SKIP
   >>> plt.hist(s, 50, density=True)
   >>> x = np.linspace(-np.pi, np.pi, num=51)
@@ -4020,13 +4223,14 @@ def vonmises(mu,
   >>> plt.plot(x, y, linewidth=2, color='r')  # doctest: +SKIP
   >>> plt.show()
   """
-  return DEFAULT.vonmises(mu, kappa, size, key=key)
+  return DEFAULT.vonmises(mu, kappa, size, key=key, dtype=dtype)
 
 
 def wald(mean,
          scale,
          size: Optional[Size] = None,
-         key: Optional[SeedOrKey] = None):
+         key: Optional[SeedOrKey] = None,
+         dtype: DTypeLike = None):
   r"""
   Draw samples from a Wald, or inverse Gaussian, distribution.
 
@@ -4085,16 +4289,17 @@ def wald(mean,
   --------
   Draw values from the distribution and plot the histogram:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> h = plt.hist(bc.random.wald(3, 2, 100000), bins=200, density=True)
   >>> plt.show()
   """
-  return DEFAULT.wald(mean, scale, size, key=key)
+  return DEFAULT.wald(mean, scale, size, key=key, dtype=dtype)
 
 
 def weibull(a,
             size: Optional[Size] = None,
-            key: Optional[SeedOrKey] = None):
+            key: Optional[SeedOrKey] = None,
+            dtype: DTypeLike = None):
   r"""
   Draw samples from a Weibull distribution.
 
@@ -4173,7 +4378,7 @@ def weibull(a,
   Display the histogram of the samples, along with
   the probability density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> x = np.arange(1,100.)/50.
   >>> def weib(x,n,a):
   ...     return (a / n) * (x / n)**(a - 1) * np.exp(-(x / n)**a)
@@ -4185,13 +4390,14 @@ def weibull(a,
   >>> plt.show()
 
   """
-  return DEFAULT.weibull(a, size, key=key)
+  return DEFAULT.weibull(a, size, key=key, dtype=dtype)
 
 
 def weibull_min(a,
                 scale=None,
                 size: Optional[Size] = None,
-                key: Optional[SeedOrKey] = None):
+                key: Optional[SeedOrKey] = None,
+                dtype: DTypeLike = None):
   """Sample from a Weibull distribution.
 
   The scipy counterpart is `scipy.stats.weibull_min`.
@@ -4207,12 +4413,13 @@ def weibull_min(a,
     A jnp.array of samples.
 
   """
-  return DEFAULT.weibull_min(a, scale, size, key=key)
+  return DEFAULT.weibull_min(a, scale, size, key=key, dtype=dtype)
 
 
 def zipf(a,
          size: Optional[Size] = None,
-         key: Optional[SeedOrKey] = None):
+         key: Optional[SeedOrKey] = None,
+         dtype: DTypeLike = None):
   r"""
   Draw samples from a Zipf distribution.
 
@@ -4282,7 +4489,7 @@ def zipf(a,
   the expected histogram based on the probability
   density function:
 
-  >>> import matplotlib.pyplot as plt
+  >>> import matplotlib.pyplot as plt  # noqa
   >>> from scipy.special import zeta  # doctest: +SKIP
 
   `bincount` provides a fast histogram for small integers.
@@ -4299,11 +4506,12 @@ def zipf(a,
   >>> plt.title(f'Zipf sample, a={a}, size={n}')
   >>> plt.show()
   """
-  return DEFAULT.zipf(a, size, key=key)
+  return DEFAULT.zipf(a, size, key=key, dtype=dtype)
 
 
 def maxwell(size: Optional[Size] = None,
-            key: Optional[SeedOrKey] = None):
+            key: Optional[SeedOrKey] = None,
+            dtype: DTypeLike = None):
   """Sample from a one sided Maxwell distribution.
 
   The scipy counterpart is `scipy.stats.maxwell`.
@@ -4318,12 +4526,13 @@ def maxwell(size: Optional[Size] = None,
     A jnp.array of samples, of shape `shape`.
 
   """
-  return DEFAULT.maxwell(size, key=key)
+  return DEFAULT.maxwell(size, key=key, dtype=dtype)
 
 
 def t(df,
       size: Optional[Size] = None,
-      key: Optional[SeedOrKey] = None):
+      key: Optional[SeedOrKey] = None,
+      dtype: DTypeLike = None):
   """Sample Student’s t random values.
 
   Parameters
@@ -4342,12 +4551,13 @@ def t(df,
   out: array_like
     The sampled value.
   """
-  return DEFAULT.t(df, size, key=key)
+  return DEFAULT.t(df, size, key=key, dtype=dtype)
 
 
 def orthogonal(n: int,
                size: Optional[Size] = None,
-               key: Optional[SeedOrKey] = None):
+               key: Optional[SeedOrKey] = None,
+               dtype: DTypeLike = None):
   """Sample uniformly from the orthogonal group `O(n)`.
 
   Parameters
@@ -4365,12 +4575,13 @@ def orthogonal(n: int,
   out: Array
     The sampled results.
   """
-  return DEFAULT.orthogonal(n, size, key=key)
+  return DEFAULT.orthogonal(n, size, key=key, dtype=dtype)
 
 
 def loggamma(a,
              size: Optional[Size] = None,
-             key: Optional[SeedOrKey] = None):
+             key: Optional[SeedOrKey] = None,
+             dtype: DTypeLike = None):
   """Sample log-gamma random values.
 
   Parameters
@@ -4392,7 +4603,7 @@ def loggamma(a,
   out: array_like
     The sampled results.
   """
-  return DEFAULT.loggamma(a, size, key=key)
+  return DEFAULT.loggamma(a, size, key=key, dtype=dtype)
 
 
 def categorical(logits,
@@ -4778,8 +4989,8 @@ def _multinomial(key, p, n, n_max, shape=()):
   return jnp.reshape(samples_2D, shape + p.shape[-1:]) - excess
 
 
-@partial(jit, static_argnums=(2, 3))
-def _von_mises_centered(key, concentration, shape, dtype=jnp.float64):
+@partial(jit, static_argnums=(2, 3), static_argnames=['shape', 'dtype'])
+def _von_mises_centered(key, concentration, shape, dtype=None):
   """Compute centered von Mises samples using rejection sampling from [1]_ with wrapped Cauchy proposal.
 
   Returns
@@ -4794,16 +5005,18 @@ def _von_mises_centered(key, concentration, shape, dtype=jnp.float64):
 
   """
   shape = shape or jnp.shape(concentration)
-  dtype = jnp.result_type(dtype)
+  dtype = dtype or environ.dftype()
   concentration = lax.convert_element_type(concentration, dtype)
   concentration = jnp.broadcast_to(concentration, shape)
 
-  s_cutoff_map = {
-    jnp.dtype(jnp.float16): 1.8e-1,
-    jnp.dtype(jnp.float32): 2e-2,
-    jnp.dtype(jnp.float64): 1.2e-4,
-  }
-  s_cutoff = s_cutoff_map.get(dtype)
+  if dtype == jnp.float16:
+    s_cutoff = 1.8e-1
+  elif dtype == jnp.float32:
+    s_cutoff = 2e-2
+  elif dtype == jnp.float64:
+    s_cutoff = 1.2e-4
+  else:
+    raise ValueError(f"Unsupported dtype: {dtype}")
 
   r = 1.0 + jnp.sqrt(1.0 + 4.0 * concentration ** 2)
   rho = (r - jnp.sqrt(2.0 * r)) / (2.0 * concentration)
