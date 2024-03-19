@@ -3,12 +3,11 @@
 import io
 import os
 import re
-import time
 import sys
+import time
 
 from setuptools import find_packages
 from setuptools import setup
-
 
 # version
 here = os.path.abspath(os.path.dirname(__file__))
@@ -25,7 +24,9 @@ with io.open(os.path.join(here, 'README.md'), 'r', encoding='utf-8') as f:
   README = f.read()
 
 # installation packages
-packages = find_packages(exclude=['lib*', 'docs', 'tests'])
+packages = find_packages(exclude=["docs*", "tests*", "examples*", "build*",
+                                  "dist*", "brainpy.egg-info*", "brainpy/__pycache__*",
+                                  "brainpy/__init__.py"])
 
 # setup
 setup(

@@ -373,4 +373,4 @@ def tolerance():
     return jnp.array(1e-2, dtype=np.float16)
 
 
-set(dt=0.1, x64=False, precision=32, mode=Mode(), mem_scaling=IdMemScaling(), platform='cpu')
+set(dt=0.1, precision=32, mode=Mode(), mem_scaling=IdMemScaling(), platform='cpu')

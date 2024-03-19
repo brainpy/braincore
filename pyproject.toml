@@ -3,6 +3,12 @@ requires = ["setuptools", "numpy", 'jax', 'jaxlib']
 build-backend = "setuptools.build_meta"
 
 
+[tool.setuptools.packages.find]
+exclude = ["docs*", "tests*", "examples*", "build*", "dist*",
+    "brainpy.egg-info*", "brainpy/__pycache__*",
+    "brainpy/__init__.py"]
+
+
 [tool.distutils.bdist_wheel]
 universal = true
 
@@ -13,7 +19,7 @@ description = "The core system for BrainPy programming framework."
 readme = 'README.md'
 license = { file = 'LICENSE' }
 requires-python = '>=3.9'
-authors = [{ name = 'Chaoming Wang', email = 'chao.brain@qq.com' }]
+authors = [{ name = 'BrainPy Team', email = 'chao.brain@qq.com' }]
 classifiers = [
     'Natural Language :: English',
     'Operating System :: OS Independent',
