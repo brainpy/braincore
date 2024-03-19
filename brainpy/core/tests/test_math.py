@@ -41,3 +41,4 @@ def test_exprel():
     # expected = jnp.array([0.63212055, 0.09999546, 0.01 ])
     # print(math.exprel(x), exprel(np.asarray(x)))
     assert jnp.allclose(math.exprel(x), exprel(np.asarray(x)), rtol=1e-6)
+
