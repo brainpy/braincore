@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 
-from typing_extensions import Unpack
-
 from typing import Sequence, Optional, TypeVar, Any
 from typing import (_SpecialForm, _type_check, _remove_dups_flatten, _UnionGenericAlias)
 
