@@ -1,9 +1,8 @@
 import inspect
 from functools import partial, wraps
 
-import jax
 from jax import numpy as jnp
-from jax._src.api import (_vjp)
+from jax._src.api import _vjp
 from jax.api_util import argnums_partial
 from jax.extend import linear_util
 from jax.tree_util import (tree_flatten, tree_unflatten)
