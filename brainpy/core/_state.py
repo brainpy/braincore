@@ -29,8 +29,10 @@ class State(object):
   __slots__ = ('_value', '_tree')
 
   def __init__(self, value: PyTree):
+    if isinstance(value, State):
+      value = value.value
     self._value = value
-    self._tree = jax.tree_util.tree_structure(value)
+    self._tree = jax.tree.structure(value)
     register_pytree_cls(self.__class__)
 
   @property
@@ -79,7 +81,7 @@ class State(object):
 
 
 class ParamState(State):
-  __module__ = 'brainpy.state'
+  __module__ = 'brainpy.core'
 
 
 @jax.tree_util.register_pytree_node_class

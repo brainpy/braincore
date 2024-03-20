@@ -4,13 +4,13 @@ The core system for the next-generation BrainPy framework.
 
 __version__ = "0.1.1"
 
-from .projection import *
+from ._projection import *
 from ._module import *
 from ._state import *
 from ._transform import *
 from ._utils import *
 
-from .projection import __all__ as _projection_all
+from ._projection import __all__ as _projection_all
 from ._module import __all__ as _module_all
 from ._state import __all__ as _state_all
 from ._transform import __all__ as _transform_all
