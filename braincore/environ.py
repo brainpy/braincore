@@ -204,7 +204,7 @@ def set(
     _set_jax_precision(precision)
     kwargs['precision'] = precision
   if mode is not None:
-    assert isinstance(kwargs['mode'], Mode), 'mode must be a Mode instance.'
+    assert isinstance(mode, Mode), 'mode must be a Mode instance.'
     kwargs['mode'] = mode
   _environment_defaults.update(kwargs)
 
