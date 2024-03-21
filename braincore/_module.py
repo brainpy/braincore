@@ -70,7 +70,7 @@ __all__ = [
   'call_order',
 
   # state processing
-  'init_states', 'load_states', 'save_states',
+  'init_states', 'load_states', 'save_states', 'assign_states',
 ]
 
 
@@ -1462,6 +1462,31 @@ def save_states(target: Module, **kwargs) -> Dict:
     Dict. The state dict for serialization.
   """
   return {key: node.save_state(**kwargs) for key, node in target.nodes().items()}
+
+
+def assign_states(target: Module, *state_by_abs_path: Dict):
+  """
+  Assign states from the external objects.
+
+  Parameters
+  ----------
+  target: Module
+    The target module.
+  state_by_abs_path: dict
+    The state dictionary which is accessed by the "absolute" accessing method.
+
+  """
+  all_states = dict()
+  for state in state_by_abs_path:
+    all_states.update(state)
+  variables = target.states(include_self=True, method='absolute')
+  keys1 = set(all_states.keys())
+  keys2 = set(variables.keys())
+  for key in keys2.intersection(keys1):
+    variables[key].value = jax.numpy.asarray(all_states[key])
+  unexpected_keys = list(keys1 - keys2)
+  missing_keys = list(keys2 - keys1)
+  return unexpected_keys, missing_keys
 
 
 def _input_label_start(label: str):
