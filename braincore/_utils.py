@@ -12,6 +12,8 @@ from jax.interpreters import batching, mlir, xla
 from jax.lax import cond
 from jax.lib import xla_bridge
 
+from ._common import warp_module
+
 __all__ = [
   'unique_name',
   'jit_error',
@@ -79,6 +81,7 @@ def unique_name(name=None, self=None):
     return name
 
 
+@warp_module('braincore')
 def clear_name_cache(ignore_warn: bool = True):
   """Clear the cached names."""
   _name2id.clear()
@@ -87,6 +90,7 @@ def clear_name_cache(ignore_warn: bool = True):
     warnings.warn(f'All named models and their ids are cleared.', UserWarning)
 
 
+@warp_module('braincore')
 def remove_vmap(x, op='any'):
   if op == 'any':
     return _any_without_vmap(x)
@@ -177,6 +181,7 @@ def _error_msg(msg):
   raise ValueError(msg)
 
 
+@warp_module('braincore')
 def jit_error(pred, err_fun: Union[Callable, str], err_arg=None, scope: str = 'any'):
   """Check errors in a jit function.
 
@@ -210,6 +215,7 @@ def jit_error(pred, err_fun: Union[Callable, str], err_arg=None, scope: str = 'a
   _cond(err_fun, pred, err_arg)
 
 
+@warp_module('braincore')
 @jax.tree_util.register_pytree_node_class
 class Stack(dict):
   """
@@ -311,6 +317,7 @@ class Stack(dict):
     raise NotImplementedError
 
 
+@warp_module('braincore')
 def clear_buffer_memory(
     platform: str = None,
     array: bool = True,
@@ -349,6 +356,7 @@ def clear_buffer_memory(
   gc.collect()
 
 
+@warp_module('braincore')
 class MemScaling(object):
   """
   The scaling object for membrane potential.
@@ -525,6 +533,7 @@ class MemScaling(object):
     return MemScaling(bias=self._bias, scale=self._scale)
 
 
+@warp_module('braincore')
 class IdMemScaling(MemScaling):
   """
   The identity scaling object.
@@ -584,12 +593,13 @@ class IdMemScaling(MemScaling):
     return IdMemScaling()
 
 
-class ContextAsDict(dict):
+@warp_module('braincore')
+class DotDict(dict):
   """Python dictionaries with advanced dot notation access.
 
   For example:
 
-  >>> d = ContextAsDict({'a': 10, 'b': 20})
+  >>> d = DotDict({'a': 10, 'b': 20})
   >>> d.a
   10
   >>> d['a']
@@ -626,7 +636,7 @@ class ContextAsDict(dict):
       self[name] = value
 
   def __setitem__(self, name, value):
-    super(ContextAsDict, self).__setitem__(name, value)
+    super(DotDict, self).__setitem__(name, value)
     try:
       p = object.__getattribute__(self, '__parent')
       key = object.__getattribute__(self, '__key')

@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from braincore import environ
+from braincore._common import warp_module
 
 __all__ = [
   'get_dtype',
@@ -18,6 +19,7 @@ __all__ = [
 ]
 
 
+@warp_module('braincore.math')
 def get_dtype(a):
   """
   Get the dtype of a.
@@ -37,6 +39,7 @@ def get_dtype(a):
       raise ValueError(f'Can not get dtype of {a}.')
 
 
+@warp_module('braincore.math')
 def exprel(x):
   """
   Relative error exponential, ``(exp(x) - 1)/x``.
@@ -78,6 +81,7 @@ def exprel(x):
                    jnp.where(big, jnp.inf, origin))
 
 
+@warp_module('braincore.math')
 def remove_diag(arr):
   """Remove the diagonal of the matrix.
 
@@ -97,12 +101,26 @@ def remove_diag(arr):
   return jnp.reshape(arr[eyes], (arr.shape[0], arr.shape[1] - 1))
 
 
+@warp_module('braincore.math')
 def clip_by_norm(t, clip_norm, axis=None):
+  """
+  Clip the tensor by the norm of the tensor.
+
+  Args:
+    t: The tensor to be clipped.
+    clip_norm: The maximum norm value.
+    axis: The axis to calculate the norm. If None, the norm is calculated over the whole tensor.
+
+  Returns:
+    The clipped tensor.
+
+  """
   return jax.tree.map(lambda l: l * clip_norm / jnp.maximum(jnp.sqrt(jnp.sum(l * l, axis=axis, keepdims=True)),
                                                             clip_norm),
                       t)
 
 
+@warp_module('braincore.math')
 def flatten(
     input: jax.typing.ArrayLike,
     start_dim: Optional[int] = None,
@@ -150,6 +168,7 @@ def flatten(
   return jnp.reshape(input, new_shape)
 
 
+@warp_module('braincore.math')
 def unflatten(x: jax.typing.ArrayLike, dim: int, sizes: Sequence[int]) -> jax.Array:
   """
   Expands a dimension of the input tensor over multiple dimensions.
@@ -173,9 +192,29 @@ def unflatten(x: jax.typing.ArrayLike, dim: int, sizes: Sequence[int]) -> jax.Ar
   return jnp.reshape(x, new_shape)
 
 
+@warp_module('braincore.math')
 def from_numpy(x):
+  """
+  Convert the numpy array to jax array.
+
+  Args:
+    x: The numpy array.
+
+  Returns:
+    The jax array.
+  """
   return jnp.array(x)
 
 
+@warp_module('braincore.math')
 def as_numpy(x):
+  """
+  Convert the array to numpy array.
+
+  Args:
+    x: The array.
+
+  Returns:
+    The numpy array.
+  """
   return np.array(x)

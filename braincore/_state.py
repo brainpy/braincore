@@ -136,7 +136,7 @@ class StateStack(Stack):
     self[key].value = value
 
 
-def stack_compose(first: dict, *others: dict):
+def sate_compose(first: dict, *others: dict):
   """
   Compose multiple dictionaries as a ``Stack``.
 

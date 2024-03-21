@@ -38,6 +38,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from . import environ, share
+from ._common import warp_module
 from ._state import State, StateStack
 from ._utils import unique_name, Stack, jit_error, get_unique_name
 from .math import get_dtype
@@ -1373,6 +1374,7 @@ def register_delay_of_target(target: AllOfTypes[ExtendedUpdateWithBA, UpdateRetu
   return delay_cls
 
 
+@warp_module('braincore')
 def call_order(level: int = 0):
   """The decorator for indicating the resetting level.
 
@@ -1398,6 +1400,7 @@ def call_order(level: int = 0):
   return wrap
 
 
+@warp_module('braincore')
 def init_states(target: Module, *args, **kwargs) -> Module:
   """
   Reset states of all children nodes in the given target.
@@ -1426,6 +1429,7 @@ def init_states(target: Module, *args, **kwargs) -> Module:
   return target
 
 
+@warp_module('braincore')
 def load_states(target: Module, state_dict: Dict, **kwargs):
   """Copy parameters and buffers from :attr:`state_dict` into
   this module and its descendants.
@@ -1452,6 +1456,7 @@ def load_states(target: Module, state_dict: Dict, **kwargs):
   return StateLoadResult(missing_keys, unexpected_keys)
 
 
+@warp_module('braincore')
 def save_states(target: Module, **kwargs) -> Dict:
   """Save all states in the ``target`` as a dictionary for later disk serialization.
 
@@ -1464,6 +1469,7 @@ def save_states(target: Module, **kwargs) -> Dict:
   return {key: node.save_state(**kwargs) for key, node in target.nodes().items()}
 
 
+@warp_module('braincore')
 def assign_state_values(target: Module, *state_by_abs_path: Dict):
   """
   Assign state values according to the given state dictionary.
