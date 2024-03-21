@@ -126,6 +126,9 @@ class StateStack(Stack):
       results[k] = v.value
     return results
 
+  def split(self, first: type, *others: type) -> Tuple['StateStack', ...]:
+    return super().split(first, *others)
+
   def _check_elem(self, elem):
     assert isinstance(elem, State), f'must be instance of {State}'
 

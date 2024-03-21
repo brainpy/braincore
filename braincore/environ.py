@@ -179,22 +179,33 @@ def get_precision() -> int:
   return get('precision')
 
 
-def set(**kwargs):
+def set(
+    platform: str = None,
+    host_device_count: int = None,
+    gpu_preallocation: Union[float, bool] = None,
+    mem_scaling: MemScaling = None,
+    precision: int = None,
+    mode: Mode = None,
+    **kwargs
+):
   """
   Set the global default computation environment.
   """
-  if 'platform' in kwargs:
-    set_platform(kwargs.pop('platform'))
-  if 'host_device_count' in kwargs:
-    set_host_device_count(kwargs.pop('host_device_count'))
-  if 'gpu_preallocation' in kwargs:
-    set_gpu_preallocation(kwargs.pop('gpu_preallocation'))
-  if 'mem_scaling' in kwargs:
-    assert isinstance(kwargs['mem_scaling'], MemScaling), 'mem_scaling must be a MemScaling instance.'
-  if 'precision' in kwargs:
-    _set_jax_precision(kwargs['precision'])
-  # if 'mode' in kwargs:
-  #   assert isinstance(kwargs['mode'], Mode), 'mode must be a Mode instance.'
+  if platform is not None:
+    set_platform(platform)
+  if host_device_count is not None:
+    set_host_device_count(host_device_count)
+  if gpu_preallocation is not None:
+    set_gpu_preallocation(gpu_preallocation)
+  if mem_scaling is not None:
+    assert isinstance(mem_scaling, MemScaling), 'mem_scaling must be a MemScaling instance.'
+    kwargs['mem_scaling'] = mem_scaling
+  if precision is not None:
+    _set_jax_precision(precision)
+    kwargs['precision'] = precision
+  if mode is not None:
+    assert isinstance(kwargs['mode'], Mode), 'mode must be a Mode instance.'
+    kwargs['mode'] = mode
   _environment_defaults.update(kwargs)
 
 
