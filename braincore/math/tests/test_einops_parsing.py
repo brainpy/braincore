@@ -1,6 +1,6 @@
 import pytest
 
-from brainpy.core.math._einops_parsing import EinopsError, ParsedExpression, AnonymousAxis, _ellipsis
+from braincore.math._einops_parsing import EinopsError, ParsedExpression, AnonymousAxis, _ellipsis
 
 
 class AnonymousAxisPlaceholder:

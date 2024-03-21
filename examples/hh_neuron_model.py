@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-import brainpy.core as bc
+import braincore.core as bc
 
 
 class HHWithEuler(bc.Dynamics):

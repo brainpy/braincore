@@ -5,9 +5,8 @@ import contextlib
 from typing import Any
 
 __all__ = [
-  'clear', 'set', 'get', 'context',
+  'clear', 'set', 'get', 'save', 'load', 'context',
 ]
-
 
 # Default, there are several shared arguments in the global context.
 I = 'i'  # the index of the current computation.
@@ -34,7 +33,7 @@ def set(**kwargs) -> None:
     _context[k] = v
 
 
-def get(key: str, default: Any = _NOT_PROVIDE) -> Any:
+def get(key: str, default: Any = _NOT_PROVIDE, desc: str = None) -> Any:
   """
   Get shared arguments in the global context.
 
@@ -43,10 +42,15 @@ def get(key: str, default: Any = _NOT_PROVIDE) -> Any:
       The key of the shared argument.
     default: Any
       The default value if the key is not found.
+    desc: str
+      The description of the key.
   """
   if key not in _context:
     if default is _NOT_PROVIDE:
-      raise KeyError(f"Key {key} not found in the context. You can set it by `share.set({key}=value)`.")
+      if desc is not None:
+        raise KeyError(f"Key {key} not found in the context. You can set it by `share.set({key}=value)`. {desc}")
+      else:
+        raise KeyError(f"Key {key} not found in the context. You can set it by `share.set({key}=value)`.")
     return default
   return _context[key]
 
@@ -72,3 +76,7 @@ def context(**kwargs):
         del _context[k]
     # Restore the old shared arguments.
     set(**old_conflict)
+
+
+save = set
+load = get

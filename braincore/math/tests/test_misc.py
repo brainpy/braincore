@@ -2,8 +2,8 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.special import exprel
 
-import brainpy.core as bc
-from brainpy.core import math
+import braincore as bc
+from braincore import math
 
 
 def test_exprel():
@@ -41,4 +41,3 @@ def test_exprel():
     # expected = jnp.array([0.63212055, 0.09999546, 0.01 ])
     # print(math.exprel(x), exprel(np.asarray(x)))
     assert jnp.allclose(math.exprel(x), exprel(np.asarray(x)), rtol=1e-6)
-

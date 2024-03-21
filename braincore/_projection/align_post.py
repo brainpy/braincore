@@ -1,8 +1,8 @@
 from typing import Optional, Union
 
-from brainpy.core.mixin import (Mode, AllOfTypes, ParamDescriber, BindCondData, AlignPost, UpdateReturn)
-from brainpy.core._module import (register_delay_of_target, Projection, Module, Dynamics,
-                                  ReceiveInputProj, ExtendedUpdateWithBA)
+from braincore._module import (register_delay_of_target, Projection, Module, Dynamics,
+                               ReceiveInputProj, ExtendedUpdateWithBA)
+from braincore.mixin import (Mode, AllOfTypes, ParamDescriber, BindCondData, AlignPost, UpdateReturn)
 from ._utils import is_instance
 
 __all__ = [
@@ -72,8 +72,8 @@ class HalfProjAlignPostMg(Projection):
   
   .. code-block:: python
 
-    import brainpy as bp
-    import brainpy.math as bm
+    import braincore as bp
+    import braincore.math as bm
 
     class EINet(bp.DynSysGroup):
       def __init__(self):
@@ -170,8 +170,8 @@ class FullProjAlignPostMg(Projection):
 
   .. code-block:: python
 
-      import brainpy as bp
-      import brainpy.math as bm
+      import braincore as bp
+      import braincore.math as bm
 
       class EINet(bp.DynSysGroup):
         def __init__(self):

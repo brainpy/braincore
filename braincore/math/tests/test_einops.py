@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-import brainpy.core.math as bcm
-from brainpy.core.math._einops import ein_rearrange, ein_reduce, ein_repeat, _enumerate_directions
-from brainpy.core.math._einops_parsing import EinopsError
+import braincore.math as bcm
+from braincore.math._einops import ein_rearrange, ein_reduce, ein_repeat, _enumerate_directions
+from braincore.math._einops_parsing import EinopsError
 
 REDUCTIONS = ("min", "max", "sum", "mean", "prod")
 

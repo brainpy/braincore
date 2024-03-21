@@ -1,5 +1,6 @@
-import brainpy.core as bc
 import unittest
+
+import braincore as bc
 
 
 class TestMixin(unittest.TestCase):
@@ -55,5 +56,3 @@ class TestMode(unittest.TestCase):
     self.assertFalse(a.has(bc.mixin.Training))
     self.assertFalse(a.is_a(bc.mixin.Batching))
     self.assertFalse(a.has(bc.mixin.Batching))
-
-

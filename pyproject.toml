@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 exclude = ["docs*", "tests*", "examples*", "build*", "dist*",
-    "brainpy.egg-info*", "brainpy/__pycache__*",
-    "brainpy/__init__.py"]
+    "braincore.egg-info*", "braincore/__pycache__*",
+    "braincore/__init__.py"]
 
 
 [tool.distutils.bdist_wheel]
@@ -14,8 +14,8 @@ universal = true
 
 
 [project]
-name = "brainpy.core"
-description = "The core system for BrainPy programming framework."
+name = "braincore"
+description = "The core system for the BrainPy programming framework."
 readme = 'README.md'
 license = { file = 'LICENSE' }
 requires-python = '>=3.9'
@@ -51,11 +51,11 @@ dependencies = [
 dynamic = ['version']
 
 [tool.flit.module]
-name = "brainpy.core"
+name = "braincore"
 
 [project.urls]
 homepage = 'http://github.com/brainpy'
-repository = 'http://github.com/brainpy/brainpy.core'
+repository = 'http://github.com/brainpy/braincore'
 
 [project.optional-dependencies]
 testing = [

@@ -19,7 +19,7 @@ from jax._src.array import ArrayImpl
 from jax._src.typing import DTypeLike
 from jax.experimental.host_callback import call
 
-from . import environ
+from braincore import environ
 from ._state import State
 from ._utils import jit_error
 
@@ -275,7 +275,7 @@ class RandomState(State):
       size = lax.broadcast_shapes(jnp.shape(a), jnp.shape(b))
     key = self.split_key() if key is None else _formalize_key(key)
     dtype = dtype or environ.dftype()
-    r = jr.beta(key, a=a, b=b, shape=_size2shape(size),dtype=dtype)
+    r = jr.beta(key, a=a, b=b, shape=_size2shape(size), dtype=dtype)
     return r
 
   def exponential(self,
@@ -367,7 +367,7 @@ class RandomState(State):
       size = lax.broadcast_shapes(jnp.shape(scale), jnp.shape(loc))
     key = self.split_key() if key is None else _formalize_key(key)
     dtype = dtype or environ.dftype()
-    r = _loc_scale(loc, scale, jr.normal(key, shape=_size2shape(size),  dtype=dtype))
+    r = _loc_scale(loc, scale, jr.normal(key, shape=_size2shape(size), dtype=dtype))
     return r
 
   def pareto(self,
@@ -393,7 +393,7 @@ class RandomState(State):
       size = jnp.shape(lam)
     key = self.split_key() if key is None else _formalize_key(key)
     dtype = dtype or environ.ditype()
-    r = jr.poisson(key, lam=lam, shape=_size2shape(size),  dtype=dtype)
+    r = jr.poisson(key, lam=lam, shape=_size2shape(size), dtype=dtype)
     return r
 
   def standard_cauchy(self,
@@ -1176,7 +1176,7 @@ def rand(*dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
 
   Examples
   --------
-  >>> brainpy.math.random.rand(3,2)
+  >>> braincore.math.random.rand(3,2)
   array([[ 0.14022471,  0.96360618],  #random
          [ 0.37601032,  0.25528411],  #random
          [ 0.49313049,  0.94909878]]) #random
@@ -1232,7 +1232,7 @@ def randint(low, high=None, size: Optional[Size] = None,
 
   Examples
   --------
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> bc.random.randint(2, size=10)
   array([1, 0, 0, 0, 1, 1, 0, 0, 1, 0]) # random
   >>> bc.random.randint(1, size=10)
@@ -1316,7 +1316,7 @@ def random_integers(low,
 
   Examples
   --------
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> bc.random.random_integers(5)
   4 # random
   >>> type(bc.random.random_integers(5))
@@ -1398,7 +1398,7 @@ def randn(*dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
 
   Examples
   --------
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> bc.random.randn()
   2.1923875335537315  # random
 
@@ -1456,7 +1456,7 @@ def random_sample(size: Optional[Size] = None, key: Optional[SeedOrKey] = None, 
 
   Examples
   --------
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> bc.random.random_sample()
   0.47108547995356098 # random
   >>> type(bc.random.random_sample())
@@ -1547,7 +1547,7 @@ def choice(a, size: Optional[Size] = None, replace=True, p=None,
   --------
   Generate a uniform random sample from np.arange(5) of size 3:
 
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> bc.random.choice(5, 3)
   array([0, 3, 4]) # random
   >>> #This is equivalent to brainpy.math.random.randint(0,5,3)
@@ -1616,7 +1616,7 @@ def permutation(x,
 
   Examples
   --------
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> bc.random.permutation(10)
   array([1, 7, 4, 3, 0, 9, 2, 5, 8, 6]) # random
 
@@ -1654,7 +1654,7 @@ def shuffle(x, axis=0, key: Optional[SeedOrKey] = None):
 
   Examples
   --------
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> arr = np.arange(10)
   >>> bc.random.shuffle(arr)
   >>> arr
@@ -4373,7 +4373,7 @@ def weibull(a,
   Draw samples from the distribution:
 
   >>> a = 5. # shape
-  >>> s = brainpy.math.random.weibull(a, 1000)
+  >>> s = braincore.math.random.weibull(a, 1000)
 
   Display the histogram of the samples, along with
   the probability density function:
@@ -4383,7 +4383,7 @@ def weibull(a,
   >>> def weib(x,n,a):
   ...     return (a / n) * (x / n)**(a - 1) * np.exp(-(x / n)**a)
 
-  >>> count, bins, ignored = plt.hist(brainpy.math.random.weibull(5.,1000))
+  >>> count, bins, ignored = plt.hist(braincore.math.random.weibull(5.,1000))
   >>> x = np.arange(1,100.)/50.
   >>> scale = count.max()/weib(x, 1., 5.).max()
   >>> plt.plot(x, weib(x, 1., 5.)*scale)
@@ -4483,7 +4483,7 @@ def zipf(a,
 
   >>> a = 4.0
   >>> n = 20000
-  >>> s = brainpy.math.random.zipf(a, n)
+  >>> s = braincore.math.random.zipf(a, n)
 
   Display the histogram of the samples, along with
   the expected histogram based on the probability

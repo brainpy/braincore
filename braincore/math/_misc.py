@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from brainpy.core import environ
+from braincore import environ
 
 __all__ = [
   'get_dtype',

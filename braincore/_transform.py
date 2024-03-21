@@ -13,7 +13,6 @@ __all__ = [
 ]
 
 
-
 def _isgeneratorfunction(fun):
   # re-implemented here because of https://bugs.python.org/issue33261
   while inspect.ismethod(fun):
@@ -61,11 +60,11 @@ def vector_grad(func, argnums=0, return_value: bool = False, has_aux: bool = Fal
   return grad_fun
 
 
-vector_grad.__module__ = 'brainpy.core'
+vector_grad.__module__ = 'braincore'
 
 
 def for_loop():
   pass
 
 
-for_loop.__module__ = 'brainpy.core'
+for_loop.__module__ = 'braincore'
