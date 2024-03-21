@@ -1389,7 +1389,7 @@ def call_order(level: int = 0):
   if level < 0:
     level = _max_order + level
   if level < 0 or level >= _max_order:
-    raise ValueError(f'"reset_level" must be an integer in [0, 10). but we got {level}')
+    raise ValueError(f'"call_order" must be an integer in [0, 10). but we got {level}')
 
   def wrap(fun: Callable):
     fun.call_order = level
@@ -1410,18 +1410,18 @@ def init_states(target: Module, *args, **kwargs) -> Module:
   """
   nodes_with_order = []
 
-  # reset node whose `reset_state` has no `reset_level`
+  # reset node whose `init_state` has no `call_order`
   for node in list(target.nodes().values()):
-    if not hasattr(node.reset_state, 'call_order'):
-      node.reset_state(*args, **kwargs)
+    if not hasattr(node.init_state, 'call_order'):
+      node.init_state(*args, **kwargs)
     else:
       nodes_with_order.append(node)
 
   # reset the node's states
   for l in range(_max_order):
     for node in nodes_with_order:
-      if node.reset_state.call_order == l:
-        node.reset_state(*args, **kwargs)
+      if node.init_state.call_order == l:
+        node.init_state(*args, **kwargs)
 
   return target
 

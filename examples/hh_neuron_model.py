@@ -2,7 +2,8 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
-import braincore.core as bc
+import braincore as bc
+bc.environ.set(dt=0.01)
 
 
 class HHWithEuler(bc.Dynamics):
@@ -81,24 +82,22 @@ class HHWithEuler(bc.Dynamics):
     return self.spike.value
 
 
-bc.environ.set(dt=0.01)
 hh = HHWithEuler(10)
-hh.init_state()
-states = hh.states()
+states = bc.init_states(hh).states()
 
 
-def run(st_vals, x):
+def run(state_values, x):
   i, inp = x
   bc.share.set(i=i, t=i * bc.environ.get_dt())
-  states.assign_values(st_vals)
+  states.assign_values(state_values)
   hh(inp)
   return states.collect_values(), hh.V.value
 
 
-n = 100000
+n = 10000
 indices = jnp.arange(n)
-st_vals, vs = jax.lax.scan(run, states.collect_values(), (indices, bc.random.uniform(01., 10., n)))
-states.assign_values(st_vals)
+state_values, vs = jax.lax.scan(run, states.collect_values(), (indices, bc.random.uniform(01., 10., n)))
+states.assign_values(state_values)
 
 plt.plot(indices * bc.environ.get_dt(), vs)
 plt.show()
