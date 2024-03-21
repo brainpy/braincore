@@ -2,7 +2,7 @@
 The core system for the next-generation BrainPy framework.
 """
 
-__version__ = "0.1.1"
+__version__ = "0.0.1"
 
 from . import environ
 from . import math

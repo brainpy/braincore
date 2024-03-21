@@ -17,7 +17,7 @@ universal = true
 name = "braincore"
 description = "The core system for the BrainPy programming framework."
 readme = 'README.md'
-license = { file = 'LICENSE' }
+license = { text = 'GPL-3.0 license' }
 requires-python = '>=3.9'
 authors = [{ name = 'BrainPy Team', email = 'chao.brain@qq.com' }]
 classifiers = [
@@ -40,7 +40,7 @@ classifiers = [
 ]
 
 
-keywords = ["BrainPy", "brain simulation", "brain-inspired computing"]
+keywords = ["brainpy", "brain simulation", "brain-inspired computing"]
 
 dependencies = [
     'jax',

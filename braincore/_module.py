@@ -37,7 +37,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from braincore import environ, share
+from . import environ, share
 from ._state import State, StateStack
 from ._utils import unique_name, Stack, jit_error, get_unique_name
 from .math import get_dtype
@@ -70,7 +70,7 @@ __all__ = [
   'call_order',
 
   # state processing
-  'init_states', 'load_states', 'save_states', 'assign_states',
+  'init_states', 'load_states', 'save_states', 'assign_state_values',
 ]
 
 
@@ -340,7 +340,7 @@ class module_list(list):
 
   >>> import braincore as bc
   >>> l = bc.module_list([bp.dnn.Dense(1, 2),
-  >>>                   bp.dnn.LSTMCell(2, 3)])
+  >>>                     bp.dnn.LSTMCell(2, 3)])
   """
 
   __module__ = 'braincore'
@@ -1464,9 +1464,9 @@ def save_states(target: Module, **kwargs) -> Dict:
   return {key: node.save_state(**kwargs) for key, node in target.nodes().items()}
 
 
-def assign_states(target: Module, *state_by_abs_path: Dict):
+def assign_state_values(target: Module, *state_by_abs_path: Dict):
   """
-  Assign states from the external objects.
+  Assign state values according to the given state dictionary.
 
   Parameters
   ----------
