@@ -25,7 +25,7 @@ class State(object):
   Args:
     value: PyTree. It can be anything as a pyTree.
   """
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
   __slots__ = ('_value', '_tree')
 
   def __init__(self, value: PyTree):
@@ -81,7 +81,7 @@ class State(object):
 
 
 class ParamState(State):
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
 
 @jax.tree_util.register_pytree_node_class
@@ -92,7 +92,7 @@ class StateStack(Stack):
   :py:class:`~.StateStack` supports all features of python dict.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def assign_values(self, *args: Dict) -> None:
     """

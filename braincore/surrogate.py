@@ -85,7 +85,7 @@ class Surrogate(object):
   Examples
   --------
 
-  >>> import brainpy.core as bc
+  >>> import braincore.core as bc
   >>> import jax.numpy as jnp
 
   >>> class MySurrogate(bc.surrogate.Surrogate):
@@ -172,7 +172,7 @@ def sigmoid(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-2, 2, 1000)
      >>> for alpha in [1., 2., 4.]:
@@ -265,7 +265,7 @@ def piecewise_quadratic(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
@@ -355,7 +355,7 @@ def piecewise_exp(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
@@ -439,7 +439,7 @@ def soft_sign(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
@@ -519,7 +519,7 @@ def arctan(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
@@ -612,7 +612,7 @@ def nonzero_sign_log(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
@@ -696,7 +696,7 @@ def erf(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
@@ -798,7 +798,7 @@ def piecewise_leaky_relu(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for c in [0.01, 0.05, 0.1]:
@@ -906,7 +906,7 @@ def squarewave_fourier_series(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for n in [2, 4, 8]:
@@ -1002,7 +1002,7 @@ def s2nn(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> grads = bc.vector_grad(bc.surrogate.s2nn)(xs, 4., 1.)
@@ -1098,7 +1098,7 @@ def q_pseudo_spike(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:
@@ -1191,7 +1191,7 @@ def leaky_relu(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> grads = bc.vector_grad(bc.surrogate.leaky_relu)(xs, 0., 1.)
@@ -1290,7 +1290,7 @@ def log_tailed_relu(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> grads = bc.vector_grad(bc.surrogate.leaky_relu)(xs, 0., 1.)
@@ -1364,7 +1364,7 @@ def relu_grad(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for s in [0.5, 1.]:
@@ -1441,7 +1441,7 @@ def gaussian_grad(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for s in [0.5, 1., 2.]:
@@ -1531,7 +1531,7 @@ def multi_gaussian_grad(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> grads = bc.vector_grad(bc.surrogate.multi_gaussian_grad)(xs)
@@ -1608,7 +1608,7 @@ def inv_square_grad(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-1, 1, 1000)
      >>> for alpha in [1., 10., 100.]:
@@ -1677,7 +1677,7 @@ def slayer_grad(
   .. plot::
      :include-source: True
 
-     >>> import brainpy.core as bc
+     >>> import braincore.core as bc
      >>> import matplotlib.pyplot as plt
      >>> xs = jax.numpy.linspace(-3, 3, 1000)
      >>> for alpha in [0.5, 1., 2., 4.]:

@@ -12,8 +12,8 @@ import numpy as np
 from jax import config, devices, numpy as jnp
 from jax._src.typing import DTypeLike
 
-from .mixin import Mode
 from ._utils import MemScaling, IdMemScaling
+from .mixin import Mode
 
 __all__ = [
   'set', 'context', 'get', 'all',
@@ -41,7 +41,7 @@ def context(**kwargs):
 
   For instance::
 
-  >>> import brainpy.core as bc
+  >>> import braincore.core as bc
   >>> with bc.environ.context(dt=0.1) as env:
   ...     dt = bc.environ.get('dt')
   ...     print(env)

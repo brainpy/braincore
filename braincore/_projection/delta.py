@@ -1,8 +1,8 @@
 from typing import Optional, Union
 
-from brainpy.core.mixin import (Mode, BindCondData)
-from brainpy.core._module import (Module, Dynamics, Projection, ReceiveInputProj,
-                                  UpdateReturn, register_delay_of_target)
+from braincore._module import (Module, Dynamics, Projection, ReceiveInputProj,
+                               UpdateReturn, register_delay_of_target)
+from braincore.mixin import (Mode, BindCondData)
 from ._utils import is_instance
 
 __all__ = [
@@ -49,8 +49,8 @@ class HalfProjDelta(Projection):
 
   .. code-block::
 
-      import brainpy as bp
-      import brainpy.math as bm
+      import braincore as bp
+      import braincore.math as bm
 
       class Net(bp.DynamicalSystem):
         def __init__(self):
@@ -137,8 +137,8 @@ class FullProjDelta(Projection):
 
   .. code-block::
 
-      import brainpy as bp
-      import brainpy.math as bm
+      import braincore as bp
+      import braincore.math as bm
 
 
       class Net(bp.DynamicalSystem):
