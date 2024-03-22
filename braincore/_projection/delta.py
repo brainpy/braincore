@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from braincore._common import set_the_module
+from braincore._common import set_module_as
 from braincore._module import (Module, Dynamics, Projection, ReceiveInputProj,
                                UpdateReturn, register_delay_of_target)
 from braincore.mixin import (Mode, BindCondData)
@@ -23,7 +23,7 @@ class _Delta(BindCondData):
     return r
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class HalfProjDelta(Projection):
   """Defining the half-part of the synaptic projection for the Delta synapse model.
 
@@ -112,7 +112,7 @@ class HalfProjDelta(Projection):
     return current
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class FullProjDelta(Projection):
   """Full-chain of the synaptic projection for the Delta synapse model.
 

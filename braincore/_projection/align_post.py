@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from braincore._common import set_the_module
+from braincore._common import set_module_as
 from braincore._module import (register_delay_of_target, Projection, Module, Dynamics,
                                ReceiveInputProj, ExtendedUpdateWithBA)
 from braincore.mixin import (Mode, AllOfTypes, ParamDescriber, BindCondData, AlignPost, UpdateReturn)
@@ -51,7 +51,7 @@ class _AlignPost(Module):
     self.out.bind_cond(self.syn(*args, **kwargs))
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class HalfProjAlignPostMg(Projection):
   r"""
   Defining the half part of synaptic projection with the align-post reduction and the automatic synapse merging.
@@ -148,7 +148,7 @@ class HalfProjAlignPostMg(Projection):
     return current
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class FullProjAlignPostMg(Projection):
   """Full-chain synaptic projection with the align-post reduction and the automatic synapse merging.
 
@@ -287,7 +287,7 @@ class FullProjAlignPostMg(Projection):
     return current
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class HalfProjAlignPost(Projection):
   """Defining the half-part of synaptic projection with the align-post reduction.
 
@@ -377,7 +377,7 @@ class HalfProjAlignPost(Projection):
     return current
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class FullProjAlignPost(Projection):
   """Full-chain synaptic projection with the align-post reduction.
 

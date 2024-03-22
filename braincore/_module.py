@@ -38,7 +38,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from . import environ, share
-from ._common import set_the_module
+from ._common import set_module_as
 from ._state import State, StateStack, visible_state_dict
 from ._utils import unique_name, Stack, jit_error, get_unique_name
 from .math import get_dtype
@@ -1377,7 +1377,7 @@ def register_delay_of_target(target: AllOfTypes[ExtendedUpdateWithBA, UpdateRetu
   return delay_cls
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def call_order(level: int = 0):
   """The decorator for indicating the resetting level.
 
@@ -1403,7 +1403,7 @@ def call_order(level: int = 0):
   return wrap
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def init_states(target: Module, *args, **kwargs) -> Module:
   """
   Reset states of all children nodes in the given target.
@@ -1432,7 +1432,7 @@ def init_states(target: Module, *args, **kwargs) -> Module:
   return target
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def load_states(target: Module, state_dict: Dict, **kwargs):
   """Copy parameters and buffers from :attr:`state_dict` into
   this module and its descendants.
@@ -1459,7 +1459,7 @@ def load_states(target: Module, state_dict: Dict, **kwargs):
   return StateLoadResult(missing_keys, unexpected_keys)
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def save_states(target: Module, **kwargs) -> Dict:
   """Save all states in the ``target`` as a dictionary for later disk serialization.
 
@@ -1472,7 +1472,7 @@ def save_states(target: Module, **kwargs) -> Dict:
   return {key: node.save_state(**kwargs) for key, node in target.nodes().items()}
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def assign_state_values(target: Module, *state_by_abs_path: Dict):
   """
   Assign state values according to the given state dictionary.

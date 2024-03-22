@@ -13,7 +13,7 @@ from jax.interpreters import batching, mlir, xla
 from jax.lax import cond
 from jax.lib import xla_bridge
 
-from ._common import set_the_module
+from ._common import set_module_as
 
 __all__ = [
   'unique_name',
@@ -84,7 +84,7 @@ def unique_name(name=None, self=None):
     return name
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def clear_name_cache(ignore_warn: bool = True):
   """Clear the cached names."""
   _name2id.clear()
@@ -93,7 +93,7 @@ def clear_name_cache(ignore_warn: bool = True):
     warnings.warn(f'All named models and their ids are cleared.', UserWarning)
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def remove_vmap(x, op='any'):
   if op == 'any':
     return _any_without_vmap(x)
@@ -184,7 +184,7 @@ def _error_msg(msg):
   raise ValueError(msg)
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def jit_error(pred, err_fun: Union[Callable, str], err_arg=None, scope: str = 'any'):
   """Check errors in a jit function.
 
@@ -218,7 +218,7 @@ def jit_error(pred, err_fun: Union[Callable, str], err_arg=None, scope: str = 'a
   _cond(err_fun, pred, err_arg)
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 @jax.tree_util.register_pytree_node_class
 class Stack(dict):
   """
@@ -318,8 +318,19 @@ class Stack(dict):
   def _check_elem(self, elem: Any):
     raise NotImplementedError
 
+  def to_dict(self):
+    """
+    Convert the stack to a dict.
 
-@set_the_module('braincore')
+    Returns
+    -------
+    dict
+      The dict object.
+    """
+    return dict(self)
+
+
+@set_module_as('braincore')
 def clear_buffer_memory(
     platform: str = None,
     array: bool = True,
@@ -358,7 +369,7 @@ def clear_buffer_memory(
   gc.collect()
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class MemScaling(object):
   """
   The scaling object for membrane potential.
@@ -535,7 +546,7 @@ class MemScaling(object):
     return MemScaling(bias=self._bias, scale=self._scale)
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class IdMemScaling(MemScaling):
   """
   The identity scaling object.
@@ -595,7 +606,7 @@ class IdMemScaling(MemScaling):
     return IdMemScaling()
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class DotDict(dict):
   """Python dictionaries with advanced dot notation access.
 
@@ -727,7 +738,7 @@ def _is_instance(x, cls):
   return isinstance(x, cls)
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def not_instance_eval(*cls):
   """
   Create a partial function to evaluate if the input is not an instance of the given class.
@@ -742,7 +753,7 @@ def not_instance_eval(*cls):
   return functools.partial(_is_not_instance, cls=cls)
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 def is_instance_eval(*cls):
   """
   Create a partial function to evaluate if the input is an instance of the given class.

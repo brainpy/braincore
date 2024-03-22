@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from braincore._common import set_the_module
+from braincore._common import set_module_as
 from braincore._module import (Module, DelayAccess, Projection,
                                ExtendedUpdateWithBA, ReceiveInputProj,
                                register_delay_of_target)
@@ -41,7 +41,7 @@ class _AlignPreMg(Module):
     return self.syn(self.access())
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class FullProjAlignPreSDMg(Projection):
   """Full-chain synaptic projection with the align-pre reduction and synapse+delay updating and merging.
 
@@ -181,7 +181,7 @@ class FullProjAlignPreSDMg(Projection):
     return current
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class FullProjAlignPreDSMg(Projection):
   """Full-chain synaptic projection with the align-pre reduction and delay+synapse updating and merging.
 
@@ -318,7 +318,7 @@ class FullProjAlignPreDSMg(Projection):
     return current
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class FullProjAlignPreSD(Projection):
   """Full-chain synaptic projection with the align-pre reduction and synapse+delay updating.
 
@@ -450,7 +450,7 @@ class FullProjAlignPreSD(Projection):
     return current
 
 
-@set_the_module('braincore')
+@set_module_as('braincore')
 class FullProjAlignPreDS(Projection):
   """Full-chain synaptic projection with the align-pre reduction and delay+synapse updating.
 
