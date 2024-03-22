@@ -1,7 +1,7 @@
 from typing import Optional
 
-from brainpy.core.mixin import (BindCondData, Mode)
-from brainpy.core._module import (Module, Projection, Dynamics, ReceiveInputProj)
+from braincore._module import (Module, Projection, Dynamics, ReceiveInputProj)
+from braincore.mixin import (BindCondData, Mode)
 from ._utils import is_instance
 
 __all__ = [

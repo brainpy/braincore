@@ -1,9 +1,8 @@
 import inspect
 from functools import partial, wraps
 
-import jax
 from jax import numpy as jnp
-from jax._src.api import (_vjp)
+from jax._src.api import _vjp
 from jax.api_util import argnums_partial
 from jax.extend import linear_util
 from jax.tree_util import (tree_flatten, tree_unflatten)
@@ -12,7 +11,6 @@ __all__ = [
   'vector_grad',
   'for_loop',
 ]
-
 
 
 def _isgeneratorfunction(fun):
@@ -62,11 +60,11 @@ def vector_grad(func, argnums=0, return_value: bool = False, has_aux: bool = Fal
   return grad_fun
 
 
-vector_grad.__module__ = 'brainpy.core'
+vector_grad.__module__ = 'braincore'
 
 
 def for_loop():
   pass
 
 
-for_loop.__module__ = 'brainpy.core'
+for_loop.__module__ = 'braincore'

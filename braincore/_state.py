@@ -25,12 +25,14 @@ class State(object):
   Args:
     value: PyTree. It can be anything as a pyTree.
   """
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
   __slots__ = ('_value', '_tree')
 
   def __init__(self, value: PyTree):
+    if isinstance(value, State):
+      value = value.value
     self._value = value
-    self._tree = jax.tree_util.tree_structure(value)
+    self._tree = jax.tree.structure(value)
     register_pytree_cls(self.__class__)
 
   @property
@@ -79,7 +81,7 @@ class State(object):
 
 
 class ParamState(State):
-  __module__ = 'brainpy.state'
+  __module__ = 'braincore'
 
 
 @jax.tree_util.register_pytree_node_class
@@ -90,7 +92,7 @@ class StateStack(Stack):
   :py:class:`~.StateStack` supports all features of python dict.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def assign_values(self, *args: Dict) -> None:
     """
@@ -123,6 +125,9 @@ class StateStack(Stack):
     for k, v in self.items():
       results[k] = v.value
     return results
+
+  def split(self, first: type, *others: type) -> Tuple['StateStack', ...]:
+    return super().split(first, *others)
 
   def _check_elem(self, elem):
     assert isinstance(elem, State), f'must be instance of {State}'

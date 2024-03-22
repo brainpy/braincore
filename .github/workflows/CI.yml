@@ -49,8 +49,7 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          cd brainpy/
-          pytest core/
+          pytest braincore/
 
 
   test_macos:
@@ -79,8 +78,7 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          cd brainpy/
-          pytest core/
+          pytest braincore/
 
 
   test_windows:
@@ -109,5 +107,4 @@ jobs:
           pip install .
       - name: Test with pytest
         run: |
-          cd brainpy/
-          pytest core/ -p no:faulthandler
+          pytest braincore/ -p no:faulthandler

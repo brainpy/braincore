@@ -2,7 +2,7 @@
 
 
 """
-All the basic classes for the ``brainpy.core``.
+All the basic classes for the ``braincore``.
 
 The basic classes include:
 
@@ -37,12 +37,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from brainpy.core import environ, share
-from .math import get_dtype
-from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
+from braincore import environ, share
 from ._state import State, StateStack
 from ._utils import unique_name, Stack, jit_error, get_unique_name
-
+from .math import get_dtype
+from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
 
 Shape = Union[int, Sequence[int]]
 PyTree = Any
@@ -71,7 +70,7 @@ __all__ = [
   'call_order',
 
   # state processing
-  'init_states', 'load_states', 'save_states',
+  'init_states', 'load_states', 'save_states', 'assign_states',
 ]
 
 
@@ -91,7 +90,7 @@ class Module(object):
 
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   # the excluded states
   _invisible_states = ()
@@ -204,7 +203,7 @@ class Module(object):
     Examples
     --------
 
-    >>> import brainpy.core as bc
+    >>> import braincore as bc
     >>> x = bc.random.rand((10, 10))
     >>> l = bp.dnn.Activation(jax.numpy.tanh)
     >>> y = x >> l
@@ -320,7 +319,7 @@ class Projection(Module):
   Base class to model synaptic projections.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def update(self, *args, **kwargs):
     nodes = tuple(self.nodes(level=1, include_self=False).values())
@@ -339,12 +338,12 @@ class module_list(list):
   That is to say, any nodes that are wrapped into :py:class:`~.NodeList` will be automatically
   retieved when using :py:func:`~.nodes()` function.
 
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> l = bc.module_list([bp.dnn.Dense(1, 2),
   >>>                   bp.dnn.LSTMCell(2, 3)])
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def __init__(self, seq=()):
     super().__init__()
@@ -369,7 +368,7 @@ class module_dict(dict):
 
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def __init__(self, *args, check_unique: bool = False, **kwargs):
     super().__init__()
@@ -740,7 +739,7 @@ class Dynamics(ExtendedUpdateWithBA, ReceiveInputProj, UpdateReturn):
     mode: The computing mode.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def __init__(
       self,
@@ -845,7 +844,7 @@ class ModuleGroup(Module, Container):
     child_type: The type of the children object. Default is :py:class:`Module`.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def __init__(
       self,
@@ -907,7 +906,7 @@ class Sequential(Module, UpdateReturn, Container):
   Examples
   --------
 
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>>
   >>> # composing ANN models
   >>> l = bc.Sequential(bp.layers.Dense(100, 10),
@@ -930,7 +929,7 @@ class Sequential(Module, UpdateReturn, Container):
     mode: The object computing context/mode. Default is ``None``.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def __init__(
       self,
@@ -1091,7 +1090,7 @@ class Delay(ExtendedUpdateWithBA, ParamDesc):
     mode: Mode. The computing mode. Default None.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   not_desc_params = ('time', 'entries', 'name')
   max_time: float
@@ -1304,7 +1303,7 @@ class _StateDelay(Delay):
     init: The initial delay data.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
   _invisible_states = ('target',)
 
   def __init__(
@@ -1338,7 +1337,7 @@ class DelayAccess(Module):
     delay_entry: The delay entry.
   """
 
-  __module__ = 'brainpy.core'
+  __module__ = 'braincore'
 
   def __init__(
       self,
@@ -1381,7 +1380,7 @@ def call_order(level: int = 0):
 
   The lower the level, the earlier the function is called.
 
-  >>> import brainpy.core as bc
+  >>> import braincore as bc
   >>> bc.call_order(0)
   >>> bc.call_order(-1)
   >>> bc.call_order(-2)
@@ -1399,12 +1398,15 @@ def call_order(level: int = 0):
   return wrap
 
 
-def init_states(target: Module, *args, **kwargs):
+def init_states(target: Module, *args, **kwargs) -> Module:
   """
   Reset states of all children nodes in the given target.
 
   Args:
     target: The target Module.
+
+  Returns:
+    The target Module.
   """
   nodes_with_order = []
 
@@ -1420,6 +1422,8 @@ def init_states(target: Module, *args, **kwargs):
     for node in nodes_with_order:
       if node.reset_state.call_order == l:
         node.reset_state(*args, **kwargs)
+
+  return target
 
 
 def load_states(target: Module, state_dict: Dict, **kwargs):
@@ -1458,6 +1462,31 @@ def save_states(target: Module, **kwargs) -> Dict:
     Dict. The state dict for serialization.
   """
   return {key: node.save_state(**kwargs) for key, node in target.nodes().items()}
+
+
+def assign_states(target: Module, *state_by_abs_path: Dict):
+  """
+  Assign states from the external objects.
+
+  Parameters
+  ----------
+  target: Module
+    The target module.
+  state_by_abs_path: dict
+    The state dictionary which is accessed by the "absolute" accessing method.
+
+  """
+  all_states = dict()
+  for state in state_by_abs_path:
+    all_states.update(state)
+  variables = target.states(include_self=True, method='absolute')
+  keys1 = set(all_states.keys())
+  keys2 = set(variables.keys())
+  for key in keys2.intersection(keys1):
+    variables[key].value = jax.numpy.asarray(all_states[key])
+  unexpected_keys = list(keys1 - keys2)
+  missing_keys = list(keys2 - keys1)
+  return unexpected_keys, missing_keys
 
 
 def _input_label_start(label: str):

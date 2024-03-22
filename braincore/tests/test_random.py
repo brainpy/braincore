@@ -6,7 +6,7 @@ import jax.random as jr
 import numpy as np
 import pytest
 
-import brainpy.core as bc
+import braincore as bc
 
 
 class TestRandom(unittest.TestCase):
