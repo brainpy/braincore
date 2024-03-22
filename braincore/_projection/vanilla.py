@@ -1,6 +1,6 @@
 from typing import Optional
 
-from braincore._common import warp_module
+from braincore._common import set_the_module
 from braincore._module import (Module, Projection, Dynamics, ReceiveInputProj)
 from braincore.mixin import (BindCondData, Mode)
 from ._utils import is_instance
@@ -10,7 +10,7 @@ __all__ = [
 ]
 
 
-@warp_module('braincore')
+@set_the_module('braincore')
 class VanillaProj(Projection):
   """Synaptic projection which defines the synaptic computation with the dimension of pre-synaptic neuron group.
 

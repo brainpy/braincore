@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from braincore import environ
-from braincore._common import warp_module
+from braincore._common import set_the_module
 
 __all__ = [
   'get_dtype',
@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def get_dtype(a):
   """
   Get the dtype of a.
@@ -39,7 +39,7 @@ def get_dtype(a):
       raise ValueError(f'Can not get dtype of {a}.')
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def exprel(x):
   """
   Relative error exponential, ``(exp(x) - 1)/x``.
@@ -81,7 +81,7 @@ def exprel(x):
                    jnp.where(big, jnp.inf, origin))
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def remove_diag(arr):
   """Remove the diagonal of the matrix.
 
@@ -101,7 +101,7 @@ def remove_diag(arr):
   return jnp.reshape(arr[eyes], (arr.shape[0], arr.shape[1] - 1))
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def clip_by_norm(t, clip_norm, axis=None):
   """
   Clip the tensor by the norm of the tensor.
@@ -120,7 +120,7 @@ def clip_by_norm(t, clip_norm, axis=None):
                       t)
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def flatten(
     input: jax.typing.ArrayLike,
     start_dim: Optional[int] = None,
@@ -168,7 +168,7 @@ def flatten(
   return jnp.reshape(input, new_shape)
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def unflatten(x: jax.typing.ArrayLike, dim: int, sizes: Sequence[int]) -> jax.Array:
   """
   Expands a dimension of the input tensor over multiple dimensions.
@@ -192,7 +192,7 @@ def unflatten(x: jax.typing.ArrayLike, dim: int, sizes: Sequence[int]) -> jax.Ar
   return jnp.reshape(x, new_shape)
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def from_numpy(x):
   """
   Convert the numpy array to jax array.
@@ -206,7 +206,7 @@ def from_numpy(x):
   return jnp.array(x)
 
 
-@warp_module('braincore.math')
+@set_the_module('braincore.math')
 def as_numpy(x):
   """
   Convert the array to numpy array.

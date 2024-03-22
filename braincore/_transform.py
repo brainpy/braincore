@@ -8,7 +8,7 @@ from jax._src.api import _vjp
 from jax.api_util import argnums_partial
 from jax.extend import linear_util
 from jax.tree_util import (tree_flatten, tree_unflatten)
-from braincore._common import warp_module
+from braincore._common import set_the_module
 
 __all__ = [
   'vector_grad',
@@ -36,7 +36,7 @@ def _check_callable(fun):
     raise TypeError(f"Expected a function, got a generator function: {fun}")
 
 
-@warp_module('braincore')
+@set_the_module('braincore')
 def vector_grad(func, argnums=0, return_value: bool = False, has_aux: bool = False):
   """
    Compute the gradient of a vector with respect to the input.
@@ -79,7 +79,7 @@ def _check_f(f):
     return _warp_data(f)
 
 
-@warp_module('braincore')
+@set_the_module('braincore')
 def ifelse(
     conditions: Union[bool, Sequence[bool]],
     branches: Sequence[Any],
