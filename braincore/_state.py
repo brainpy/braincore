@@ -5,7 +5,8 @@ import jax
 from ._utils import Stack
 
 __all__ = [
-  'State', 'ParamState', 'StateStack', 'visible_state_dict',
+  'State', 'ShortTermState', 'LongTermState', 'ParamState',
+  'StateStack', 'visible_state_dict',
 ]
 
 PyTree = Any
@@ -80,7 +81,28 @@ class State(object):
     return f'{self.__class__.__name__}({self._value})'
 
 
-class ParamState(State):
+class ShortTermState(State):
+  """
+  The short-term state, which is used to store the short-term data in the program.
+
+  For example, in a training process, the gradients of the model are short-term states.
+  """
+
+  __module__ = 'braincore'
+
+
+class LongTermState(State):
+  """
+  The long-term state, which is used to store the long-term data in the program.
+
+  For example, in a training process, the weights of the model are long-term states.
+
+  """
+
+  __module__ = 'braincore'
+
+
+class ParamState(LongTermState):
   __module__ = 'braincore'
 
 

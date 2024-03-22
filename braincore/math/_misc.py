@@ -117,9 +117,10 @@ def clip_by_norm(t, clip_norm, axis=None):
     The clipped tensor.
 
   """
-  return jax.tree.map(lambda l: l * clip_norm / jnp.maximum(jnp.sqrt(jnp.sum(l * l, axis=axis, keepdims=True)),
-                                                            clip_norm),
-                      t)
+  return jax.tree.map(
+    lambda l: l * clip_norm / jnp.maximum(jnp.sqrt(jnp.sum(l * l, axis=axis, keepdims=True)), clip_norm),
+    t
+  )
 
 
 @set_module_as('braincore.math')
