@@ -1,4 +1,3 @@
-import functools
 import inspect
 from functools import partial, wraps
 from typing import Any, Sequence, Union

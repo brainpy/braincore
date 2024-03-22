@@ -39,7 +39,7 @@ import numpy as np
 
 from . import environ, share
 from ._common import warp_module
-from ._state import State, StateStack
+from ._state import State, StateStack, visible_state_dict
 from ._utils import unique_name, Stack, jit_error, get_unique_name
 from .math import get_dtype
 from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
@@ -165,6 +165,9 @@ class Module(object):
         v = getattr(node, k)
         if isinstance(v, State):
           states[f'{node_path}.{k}' if node_path else k] = v
+        elif isinstance(v, visible_state_dict):
+          for k2, v2 in v.items():
+            states[f'{node_path}.{k}.{k2}'] = v2
     return states
 
   def nodes(self, method='absolute', level=-1, include_self=True) -> Stack:

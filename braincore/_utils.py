@@ -1,4 +1,5 @@
 import copy
+import functools
 import gc
 import warnings
 from functools import wraps, partial
@@ -18,6 +19,8 @@ __all__ = [
   'unique_name',
   'jit_error',
   'clear_buffer_memory',
+  'not_instance_eval',
+  'is_instance_eval',
   'Stack',
   'MemScaling',
   'IdMemScaling',
@@ -715,3 +718,40 @@ class DotDict(dict):
     else:
       self[key] = default
       return default
+
+
+def _is_not_instance(x, cls):
+  return not isinstance(x, cls)
+
+
+def _is_instance(x, cls):
+  return isinstance(x, cls)
+
+
+@warp_module('braincore')
+def not_instance_eval(*cls):
+  """
+  Create a partial function to evaluate if the input is not an instance of the given class.
+
+  Args:
+    *cls: The classes to check.
+
+  Returns:
+    The partial function.
+
+  """
+  return functools.partial(_is_not_instance, cls=cls)
+
+
+@warp_module('braincore')
+def is_instance_eval(*cls):
+  """
+  Create a partial function to evaluate if the input is an instance of the given class.
+
+  Args:
+    *cls: The classes to check.
+
+  Returns:
+    The partial function.
+  """
+  return functools.partial(_is_instance, cls=cls)
