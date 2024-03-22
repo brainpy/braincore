@@ -243,15 +243,14 @@ class Stack(dict):
           gather[k] = v
     return gather
 
-  def add_elem(self, var: Any):
+  def add_unique_elem(self, key: Any, var: Any):
     """Add a new element."""
     self._check_elem(var)
-    id_ = id(var)
-    if id_ not in self:
-      self[id_] = var
+    if key in self:
+      if id(var) != id(self[key]):
+        raise ValueError(f'{key} has been registered by {self[key]}, the new value is different from it.')
     else:
-      if id(self[id_]) != id_:
-        raise ValueError(f'{id_} has been registered by {self[id_]}')
+      self[key] = var
 
   def unique(self) -> 'Stack':
     """
