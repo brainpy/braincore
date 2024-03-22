@@ -5,6 +5,7 @@ The core system for the next-generation BrainPy framework.
 __version__ = "0.0.1"
 
 from . import environ
+from . import integrate
 from . import math
 from . import mixin
 from . import random
@@ -21,7 +22,7 @@ from ._utils import *
 from ._utils import __all__ as _utils_all
 
 __all__ = (
-    ['environ', 'share', 'surrogate', 'random', 'mixin', 'math', 'transform'] +
+    ['environ', 'share', 'surrogate', 'random', 'mixin', 'math', 'transform', 'integrate'] +
     _projection_all + _module_all + _state_all + _utils_all
 )
 del _projection_all, _module_all, _state_all, _utils_all

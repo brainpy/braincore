@@ -2,17 +2,10 @@ import copy
 import functools
 import gc
 import warnings
-from functools import wraps, partial
-from typing import Any, Callable, Tuple, Union, Sequence
 from collections.abc import Iterable
+from typing import Any, Callable, Tuple, Union, Sequence
 
 import jax
-
-from jax import numpy as jnp
-from jax.core import Primitive, ShapedArray
-from jax.experimental.host_callback import id_tap
-from jax.interpreters import batching, mlir, xla
-from jax.lax import cond
 from jax.lib import xla_bridge
 
 from ._common import set_module_as

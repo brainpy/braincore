@@ -20,7 +20,7 @@ For handling dynamical systems:
 
 For handling the delays:
 
-- ``StateDelay``: The class for the state delay.
+- ``Delay``: The class for all delays.
 - ``DataDelay``: The class for the data delay.
 - ``DelayAccess``: The class for the delay access.
 
@@ -40,9 +40,10 @@ import numpy as np
 from . import environ, share
 from ._common import set_module_as
 from ._state import State, StateStack, visible_state_dict
-from ._utils import unique_name, Stack, jit_error, get_unique_name
+from ._utils import unique_name, Stack, get_unique_name
 from .math import get_dtype
 from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
+from .transform import jit_error
 
 Shape = Union[int, Sequence[int]]
 PyTree = Any
