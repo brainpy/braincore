@@ -24,6 +24,18 @@ from warnings import warn
 import numpy as np
 
 __all__ = [
+  "_di",
+  "Dimension",
+  "DIMENSIONLESS",
+  "UFUNCS_PRESERVE_DIMENSIONS",
+  "UFUNCS_CHANGE_DIMENSIONS",
+  "UFUNCS_MATCHING_DIMENSIONS",
+  "UFUNCS_COMPARISONS",
+  "UFUNCS_LOGICAL",
+  "UFUNCS_DIMENSIONLESS",
+  "UFUNCS_DIMENSIONLESS_TWOARGS",
+  "UFUNCS_INTEGERS",
+  "fail_for_dimension_mismatch",
   "DimensionMismatchError",
   "get_or_create_dimension",
   "get_dimensions",
@@ -766,7 +778,7 @@ def get_dimensions(obj):
       The physical dimensions of the `obj`.
   """
   try:
-    return obj.dim
+    return obj.unit
   except AttributeError:
     # The following is not very pretty, but it will avoid the costly
     # isinstance check for the common types
@@ -1024,7 +1036,7 @@ class Quantity(np.ndarray):
   in_best_unit
   """
 
-  __slots__ = ["dim", 'value', 'unit']
+  __slots__ = ['value', 'unit']
   # value: jax.Array, np.ndarray, or number, custom type, pytree
   # unit: Unit, 1, None
 
