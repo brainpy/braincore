@@ -40,7 +40,7 @@ import numpy as np
 from . import environ, share
 from ._common import set_module_as
 from ._state import State, StateStack, visible_state_dict
-from ._utils import unique_name, Stack, get_unique_name
+from ._utils import unique_name, Stack, get_unique_name, DotDict
 from .math import get_dtype
 from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
 from .transform import jit_error
@@ -95,10 +95,10 @@ class Module(object):
   __module__ = 'braincore'
 
   # the excluded states
-  _invisible_states = ()
+  _invisible_states: Tuple[str, ...] = ()
 
   # the excluded nodes
-  _invisible_nodes = ()
+  _invisible_nodes: Tuple[str, ...] = ()
 
   # # the supported computing modes
   # supported_modes: Optional[Sequence[Mode]] = None
@@ -109,12 +109,22 @@ class Module(object):
     # check whether the object has a unique name.
     self._name = unique_name(self=self, name=name)
 
+    # the state cache
+    self._state_cache: Dict[str, State] = None
+
     # mode setting
     self._mode = None
     self.mode = mode if mode is not None else environ.get('mode')
 
   def __repr__(self):
     return f'{self.__class__.__name__}({self.name}, mode={self.mode})'
+
+  @property
+  def statecache(self) -> DotDict:
+    """The cache property which can be used to store state stacks."""
+    if self._state_cache is None:
+      self._state_cache = DotDict()
+    return self._state_cache
 
   @property
   def name(self):
@@ -137,41 +147,75 @@ class Module(object):
                        f'but we got {type(value)}: {value}')
     self._mode = value
 
-  def states(self, method: str = 'absolute', level: int = -1, include_self: bool = True) -> StateStack:
+  def states(
+      self,
+      cache: Optional[str] = None,
+      method: str = 'absolute',
+      level: int = -1,
+      include_self: bool = True,
+      unique: bool = True,
+  ) -> StateStack:
     """
     Collect all states in this node and the children nodes.
 
     Parameters
     ----------
+    cache: str
+      The cache name. If None, the cache will not be used. Default is None.
     method : str
       The method to access the variables.
     level: int
       The hierarchy level to find variables.
     include_self: bool
       Whether include the variables in the self.
+    unique: bool
+      Whether return the unique variables.
 
     Returns
     -------
     states : StateStack
       The collection contained (the path, the variable).
     """
+
+    if cache is not None:
+      cache = f'method={method}, level={level}, include_self={include_self}, unique={unique}, cache={cache}'
+      if cache in self.statecache:
+        return self.statecache[cache]
+
+    # find the nodes
     nodes = self.nodes(method=method, level=level, include_self=include_self)
 
-    # state stacks
+    # get the state stack
     states = StateStack()
+    _state_id = set()
     for node_path, node in nodes.items():
       for k in node.__dict__.keys():
         if k in node._invisible_states:
           continue
         v = getattr(node, k)
         if isinstance(v, State):
+          if unique and id(v) in _state_id:
+            continue
+          _state_id.add(id(v))
           states[f'{node_path}.{k}' if node_path else k] = v
         elif isinstance(v, visible_state_dict):
           for k2, v2 in v.items():
+            if unique and id(v2) in _state_id:
+              continue
+            _state_id.add(id(v2))
             states[f'{node_path}.{k}.{k2}'] = v2
+
+    # cache the state stack
+    if cache is not None:
+      self.statecache[cache] = states
     return states
 
-  def nodes(self, method='absolute', level=-1, include_self=True) -> Stack:
+  def nodes(
+      self,
+      method: str = 'absolute',
+      level: int = -1,
+      include_self: bool = True
+  ) -> Stack:
     """
     Collect all children nodes.
 
@@ -237,7 +281,7 @@ class Module(object):
     return unexpected_keys, missing_keys
 
 
-def _find_nodes(self, method='absolute', level=-1, include_self=True, _lid=0, _edges=None) -> Stack:
+def _find_nodes(self, method: str = 'absolute', level=-1, include_self=True, _lid=0, _edges=None) -> Stack:
   if _edges is None:
     _edges = set()
   gather = Stack()
@@ -253,7 +297,7 @@ def _find_nodes(self, method='absolute', level=-1, include_self=True, _lid=0, _e
   if method == 'absolute':
     nodes = []
     for k, v in self.__dict__.items():
-      if k not in self._invisible_nodes:
+      if k in self._invisible_nodes:
         continue
       if isinstance(v, Module):
         _add_node_absolute(self, v, _edges, gather, nodes)
@@ -277,6 +321,8 @@ def _find_nodes(self, method='absolute', level=-1, include_self=True, _lid=0, _e
   elif method == 'relative':
     nodes = []
     for k, v in self.__dict__.items():
+      if v in self._invisible_nodes:
+        continue
       if isinstance(v, Module):
         _add_node_relative(self, k, v, _edges, gather, nodes)
       elif isinstance(v, module_list):
