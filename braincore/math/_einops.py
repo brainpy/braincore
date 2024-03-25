@@ -569,6 +569,9 @@ def ein_reduce(tensor: Union[jax.typing.ArrayLike, List[jax.typing.ArrayLike]],
     raise EinopsError(message + "\n {}".format(e))
 
 
+ein_reduce.__module__ = 'braincore.math'
+
+
 def ein_rearrange(tensor: Union[jax.typing.ArrayLike, List[jax.typing.ArrayLike]],
                   pattern: str, **axes_lengths) -> jax.typing.ArrayLike:
   """
@@ -628,6 +631,9 @@ def ein_rearrange(tensor: Union[jax.typing.ArrayLike, List[jax.typing.ArrayLike]
   return ein_reduce(tensor, pattern, reduction="rearrange", **axes_lengths)
 
 
+ein_rearrange.__module__ = 'braincore.math'
+
+
 def ein_repeat(
     tensor: Union[jax.typing.ArrayLike, List[jax.typing.ArrayLike]],
     pattern: str, **axes_lengths
@@ -681,6 +687,9 @@ def ein_repeat(
   return ein_reduce(tensor, pattern, reduction="repeat", **axes_lengths)
 
 
+ein_repeat.__module__ = 'braincore.math'
+
+
 def ein_shape(x, pattern: str) -> dict:
   """
   Parse a tensor shape to dictionary mapping axes names to their lengths.
@@ -731,6 +740,9 @@ def ein_shape(x, pattern: str) -> dict:
     if axis_name != "_":
       result[axis_name] = axis_length
   return result
+
+
+ein_shape.__module__ = 'braincore.math'
 
 
 # _enumerate_directions is not exposed in the public API

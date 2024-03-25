@@ -1,21 +1,20 @@
 import copy
+import functools
 import gc
 import warnings
-from functools import wraps, partial
+from collections.abc import Iterable
 from typing import Any, Callable, Tuple, Union, Sequence
 
 import jax
-from jax import numpy as jnp
-from jax.core import Primitive, ShapedArray
-from jax.experimental.host_callback import id_tap
-from jax.interpreters import batching, mlir, xla
-from jax.lax import cond
 from jax.lib import xla_bridge
+
+from ._common import set_module_as
 
 __all__ = [
   'unique_name',
-  'jit_error',
   'clear_buffer_memory',
+  'not_instance_eval',
+  'is_instance_eval',
   'Stack',
   'MemScaling',
   'IdMemScaling',
@@ -79,6 +78,7 @@ def unique_name(name=None, self=None):
     return name
 
 
+@set_module_as('braincore')
 def clear_name_cache(ignore_warn: bool = True):
   """Clear the cached names."""
   _name2id.clear()
@@ -87,129 +87,8 @@ def clear_name_cache(ignore_warn: bool = True):
     warnings.warn(f'All named models and their ids are cleared.', UserWarning)
 
 
-def remove_vmap(x, op='any'):
-  if op == 'any':
-    return _any_without_vmap(x)
-  elif op == 'all':
-    return _all_without_vmap(x)
-  else:
-    raise ValueError(f'Do not support type: {op}')
 
-
-_any_no_vmap_prim = Primitive('any_no_vmap')
-
-
-def _any_without_vmap(x):
-  return _any_no_vmap_prim.bind(x)
-
-
-def _any_without_vmap_imp(x):
-  return jnp.any(x)
-
-
-def _any_without_vmap_abs(x):
-  return ShapedArray(shape=(), dtype=jnp.bool_)
-
-
-def _any_without_vmap_batch(x, batch_axes):
-  (x,) = x
-  return _any_without_vmap(x), batching.not_mapped
-
-
-_any_no_vmap_prim.def_impl(_any_without_vmap_imp)
-_any_no_vmap_prim.def_abstract_eval(_any_without_vmap_abs)
-batching.primitive_batchers[_any_no_vmap_prim] = _any_without_vmap_batch
-if hasattr(xla, "lower_fun"):
-  xla.register_translation(_any_no_vmap_prim,
-                           xla.lower_fun(_any_without_vmap_imp, multiple_results=False, new_style=True))
-mlir.register_lowering(_any_no_vmap_prim, mlir.lower_fun(_any_without_vmap_imp, multiple_results=False))
-
-_all_no_vmap_prim = Primitive('all_no_vmap')
-
-
-def _all_without_vmap(x):
-  return _all_no_vmap_prim.bind(x)
-
-
-def _all_without_vmap_imp(x):
-  return jnp.all(x)
-
-
-def _all_without_vmap_abs(x):
-  return ShapedArray(shape=(), dtype=jnp.bool_)
-
-
-def _all_without_vmap_batch(x, batch_axes):
-  (x,) = x
-  return _all_without_vmap(x), batching.not_mapped
-
-
-_all_no_vmap_prim.def_impl(_all_without_vmap_imp)
-_all_no_vmap_prim.def_abstract_eval(_all_without_vmap_abs)
-batching.primitive_batchers[_all_no_vmap_prim] = _all_without_vmap_batch
-if hasattr(xla, "lower_fun"):
-  xla.register_translation(_all_no_vmap_prim,
-                           xla.lower_fun(_all_without_vmap_imp, multiple_results=False, new_style=True))
-mlir.register_lowering(_all_no_vmap_prim, mlir.lower_fun(_all_without_vmap_imp, multiple_results=False))
-
-
-def _err_jit_true_branch(err_fun, x):
-  id_tap(err_fun, x)
-  return
-
-
-def _err_jit_false_branch(x):
-  return
-
-
-def _cond(err_fun, pred, err_arg):
-  @wraps(err_fun)
-  def true_err_fun(arg, transforms):
-    err_fun(arg)
-
-  cond(pred,
-       partial(_err_jit_true_branch, true_err_fun),
-       _err_jit_false_branch,
-       err_arg)
-
-
-def _error_msg(msg):
-  raise ValueError(msg)
-
-
-def jit_error(pred, err_fun: Union[Callable, str], err_arg=None, scope: str = 'any'):
-  """Check errors in a jit function.
-
-  >>> def error(arg):
-  >>>    raise ValueError(f'error {arg}')
-  >>> x = jax.random.uniform(jax.random.PRNGKey(0), (10,))
-  >>> jit_error(x.sum() < 5., error, err_arg=x)
-
-  Parameters
-  ----------
-  pred: bool, Array
-    The boolean prediction.
-  err_fun: callable
-    The error function, which raise errors.
-  err_arg: any
-    The arguments which passed into `err_f`.
-  scope: str
-    The scope of the error message. Can be None, 'all' or 'any'.
-  """
-  if isinstance(err_fun, str):
-    err_fun = partial(_error_msg, err_fun)
-    assert err_arg is None, "err_arg should be None when err_fun is a string."
-  if scope is None:
-    pred = pred
-  elif scope == 'all':
-    pred = remove_vmap(pred, 'all')
-  elif scope == 'any':
-    pred = remove_vmap(pred, 'any')
-  else:
-    raise ValueError(f"Unknown scope: {scope}")
-  _cond(err_fun, pred, err_arg)
-
-
+@set_module_as('braincore')
 @jax.tree_util.register_pytree_node_class
 class Stack(dict):
   """
@@ -218,7 +97,7 @@ class Stack(dict):
   :py:class:`~.Stack` supports all features of python dict.
   """
 
-  def subset(self, sep: Union[type, Callable]) -> 'Stack':
+  def subset(self, sep: Union[type, Tuple[type, ...], Callable]) -> 'Stack':
     """
     Get a new stack with the subset of keys.
     """
@@ -234,15 +113,24 @@ class Stack(dict):
           gather[k] = v
     return gather
 
-  def add_elem(self, var: Any):
+  def not_subset(self, sep: Union[type, Tuple[type, ...]]) -> 'Stack':
+    """
+    Get a new stack with the subset of keys.
+    """
+    gather = type(self)()
+    for k, v in self.items():
+      if not isinstance(v, sep):
+        gather[k] = v
+    return gather
+
+  def add_unique_elem(self, key: Any, var: Any):
     """Add a new element."""
     self._check_elem(var)
-    id_ = id(var)
-    if id_ not in self:
-      self[id_] = var
+    if key in self:
+      if id(var) != id(self[key]):
+        raise ValueError(f'{key} has been registered by {self[key]}, the new value is different from it.')
     else:
-      if id(self[id_]) != id_:
-        raise ValueError(f'{id_} has been registered by {self[id_]}')
+      self[key] = var
 
   def unique(self) -> 'Stack':
     """
@@ -283,14 +171,88 @@ class Stack(dict):
         results[-1][k] = v
     return results
 
-  def pop_by_value_ids(self, *ids, error_when_absent: bool = False):
-    """Remove or pop variables in the stack by the given ids."""
-    if error_when_absent:
-      for id_ in ids:
-        self.pop(id_)
+  def pop_by_keys(self, keys: Iterable):
+    """
+    Pop the elements by the keys.
+    """
+    for k in tuple(self.keys()):
+      if k in keys:
+        self.pop(k)
+
+  def pop_by_values(self, values: Iterable, by: str = 'id'):
+    """
+    Pop the elements by the values.
+
+    Args:
+      values: The value ids.
+      by: str. The discard method, can be ``id`` or ``value``. Default is 'id'.
+    """
+    if by == 'id':
+      value_ids = {id(v) for v in values}
+      for k in tuple(self.keys()):
+        if id(self[k]) in value_ids:
+          self.pop(k)
+    elif by == 'value':
+      for k in tuple(self.keys()):
+        if self[k] in values:
+          self.pop(k)
     else:
-      for id_ in ids:
-        self.pop(id_, None)
+      raise ValueError(f'Unsupported method: {by}')
+
+  def difference_by_keys(self, keys: Iterable):
+    """
+    Get the difference of the stack by the keys.
+    """
+    return type(self)({k: v for k, v in self.items() if k not in keys})
+
+  def difference_by_values(self, values: Iterable, by: str = 'id'):
+    """
+    Get the difference of the stack by the values.
+
+    Args:
+      values: The value ids.
+      by: str. The discard method, can be ``id`` or ``value``. Default is 'id'.
+    """
+    if by == 'id':
+      value_ids = {id(v) for v in values}
+      return type(self)({k: v for k, v in self.items() if id(v) not in value_ids})
+    elif by == 'value':
+      return type(self)({k: v for k, v in self.items() if v not in values})
+    else:
+      raise ValueError(f'Unsupported method: {by}')
+
+  def intersection_by_keys(self, keys: Iterable):
+    """
+    Get the intersection of the stack by the keys.
+    """
+    return type(self)({k: v for k, v in self.items() if k in keys})
+
+  def intersection_by_values(self, values: Iterable, by: str = 'id'):
+    """
+    Get the intersection of the stack by the values.
+
+    Args:
+      values: The value ids.
+      by: str. The discard method, can be ``id`` or ``value``. Default is 'id'.
+    """
+    if by == 'id':
+      value_ids = {id(v) for v in values}
+      return type(self)({k: v for k, v in self.items() if id(v) in value_ids})
+    elif by == 'value':
+      return type(self)({k: v for k, v in self.items() if v in values})
+    else:
+      raise ValueError(f'Unsupported method: {by}')
+
+  def union_by_value_ids(self, other: dict):
+    """
+    Union the stack by the value ids.
+
+    Args:
+      other:
+
+    Returns:
+
+    """
 
   def __add__(self, other: dict):
     """
@@ -310,7 +272,19 @@ class Stack(dict):
   def _check_elem(self, elem: Any):
     raise NotImplementedError
 
+  def to_dict(self):
+    """
+    Convert the stack to a dict.
 
+    Returns
+    -------
+    dict
+      The dict object.
+    """
+    return dict(self)
+
+
+@set_module_as('braincore')
 def clear_buffer_memory(
     platform: str = None,
     array: bool = True,
@@ -349,6 +323,7 @@ def clear_buffer_memory(
   gc.collect()
 
 
+@set_module_as('braincore')
 class MemScaling(object):
   """
   The scaling object for membrane potential.
@@ -525,6 +500,7 @@ class MemScaling(object):
     return MemScaling(bias=self._bias, scale=self._scale)
 
 
+@set_module_as('braincore')
 class IdMemScaling(MemScaling):
   """
   The identity scaling object.
@@ -584,12 +560,13 @@ class IdMemScaling(MemScaling):
     return IdMemScaling()
 
 
-class ContextAsDict(dict):
+@set_module_as('braincore')
+class DotDict(dict):
   """Python dictionaries with advanced dot notation access.
 
   For example:
 
-  >>> d = ContextAsDict({'a': 10, 'b': 20})
+  >>> d = DotDict({'a': 10, 'b': 20})
   >>> d.a
   10
   >>> d['a']
@@ -626,7 +603,7 @@ class ContextAsDict(dict):
       self[name] = value
 
   def __setitem__(self, name, value):
-    super(ContextAsDict, self).__setitem__(name, value)
+    super(DotDict, self).__setitem__(name, value)
     try:
       p = object.__getattribute__(self, '__parent')
       key = object.__getattribute__(self, '__key')
@@ -705,3 +682,40 @@ class ContextAsDict(dict):
     else:
       self[key] = default
       return default
+
+
+def _is_not_instance(x, cls):
+  return not isinstance(x, cls)
+
+
+def _is_instance(x, cls):
+  return isinstance(x, cls)
+
+
+@set_module_as('braincore')
+def not_instance_eval(*cls):
+  """
+  Create a partial function to evaluate if the input is not an instance of the given class.
+
+  Args:
+    *cls: The classes to check.
+
+  Returns:
+    The partial function.
+
+  """
+  return functools.partial(_is_not_instance, cls=cls)
+
+
+@set_module_as('braincore')
+def is_instance_eval(*cls):
+  """
+  Create a partial function to evaluate if the input is an instance of the given class.
+
+  Args:
+    *cls: The classes to check.
+
+  Returns:
+    The partial function.
+  """
+  return functools.partial(_is_instance, cls=cls)

@@ -20,7 +20,7 @@ For handling dynamical systems:
 
 For handling the delays:
 
-- ``StateDelay``: The class for the state delay.
+- ``Delay``: The class for all delays.
 - ``DataDelay``: The class for the data delay.
 - ``DelayAccess``: The class for the delay access.
 
@@ -37,11 +37,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from braincore import environ, share
-from ._state import State, StateStack
-from ._utils import unique_name, Stack, jit_error, get_unique_name
+from . import environ, share
+from ._common import set_module_as
+from ._state import State, StateStack, visible_state_dict
+from ._utils import unique_name, Stack, get_unique_name, DotDict
 from .math import get_dtype
 from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
+from .transform import jit_error
 
 Shape = Union[int, Sequence[int]]
 PyTree = Any
@@ -70,7 +72,7 @@ __all__ = [
   'call_order',
 
   # state processing
-  'init_states', 'load_states', 'save_states', 'assign_states',
+  'init_states', 'load_states', 'save_states', 'assign_state_values',
 ]
 
 
@@ -93,10 +95,10 @@ class Module(object):
   __module__ = 'braincore'
 
   # the excluded states
-  _invisible_states = ()
+  _invisible_states: Tuple[str, ...] = ()
 
   # the excluded nodes
-  _invisible_nodes = ()
+  _invisible_nodes: Tuple[str, ...] = ()
 
   # # the supported computing modes
   # supported_modes: Optional[Sequence[Mode]] = None
@@ -107,12 +109,22 @@ class Module(object):
     # check whether the object has a unique name.
     self._name = unique_name(self=self, name=name)
 
+    # the state cache
+    self._state_cache: Dict[str, State] = None
+
     # mode setting
     self._mode = None
     self.mode = mode if mode is not None else environ.get('mode')
 
   def __repr__(self):
     return f'{self.__class__.__name__}({self.name}, mode={self.mode})'
+
+  @property
+  def statecache(self) -> DotDict:
+    """The cache property which can be used to store state stacks."""
+    if self._state_cache is None:
+      self._state_cache = DotDict()
+    return self._state_cache
 
   @property
   def name(self):
@@ -135,38 +147,75 @@ class Module(object):
                        f'but we got {type(value)}: {value}')
     self._mode = value
 
-  def states(self, method: str = 'absolute', level: int = -1, include_self: bool = True) -> StateStack:
+  def states(
+      self,
+      cache: Optional[str] = None,
+      method: str = 'absolute',
+      level: int = -1,
+      include_self: bool = True,
+      unique: bool = True,
+  ) -> StateStack:
     """
     Collect all states in this node and the children nodes.
 
     Parameters
     ----------
+    cache: str
+      The cache name. If None, the cache will not be used. Default is None.
     method : str
       The method to access the variables.
     level: int
       The hierarchy level to find variables.
     include_self: bool
       Whether include the variables in the self.
+    unique: bool
+      Whether return the unique variables.
 
     Returns
     -------
     states : StateStack
       The collection contained (the path, the variable).
     """
+
+    if cache is not None:
+      cache = f'method={method}, level={level}, include_self={include_self}, unique={unique}, cache={cache}'
+      if cache in self.statecache:
+        return self.statecache[cache]
+
+    # find the nodes
     nodes = self.nodes(method=method, level=level, include_self=include_self)
 
-    # state stacks
+    # get the state stack
     states = StateStack()
+    _state_id = set()
     for node_path, node in nodes.items():
       for k in node.__dict__.keys():
         if k in node._invisible_states:
           continue
         v = getattr(node, k)
         if isinstance(v, State):
+          if unique and id(v) in _state_id:
+            continue
+          _state_id.add(id(v))
           states[f'{node_path}.{k}' if node_path else k] = v
+        elif isinstance(v, visible_state_dict):
+          for k2, v2 in v.items():
+            if unique and id(v2) in _state_id:
+              continue
+            _state_id.add(id(v2))
+            states[f'{node_path}.{k}.{k2}'] = v2
+
+    # cache the state stack
+    if cache is not None:
+      self.statecache[cache] = states
     return states
 
-  def nodes(self, method='absolute', level=-1, include_self=True) -> Stack:
+  def nodes(
+      self,
+      method: str = 'absolute',
+      level: int = -1,
+      include_self: bool = True
+  ) -> Stack:
     """
     Collect all children nodes.
 
@@ -232,7 +281,7 @@ class Module(object):
     return unexpected_keys, missing_keys
 
 
-def _find_nodes(self, method='absolute', level=-1, include_self=True, _lid=0, _edges=None) -> Stack:
+def _find_nodes(self, method: str = 'absolute', level=-1, include_self=True, _lid=0, _edges=None) -> Stack:
   if _edges is None:
     _edges = set()
   gather = Stack()
@@ -248,7 +297,7 @@ def _find_nodes(self, method='absolute', level=-1, include_self=True, _lid=0, _e
   if method == 'absolute':
     nodes = []
     for k, v in self.__dict__.items():
-      if k not in self._invisible_nodes:
+      if k in self._invisible_nodes:
         continue
       if isinstance(v, Module):
         _add_node_absolute(self, v, _edges, gather, nodes)
@@ -272,6 +321,8 @@ def _find_nodes(self, method='absolute', level=-1, include_self=True, _lid=0, _e
   elif method == 'relative':
     nodes = []
     for k, v in self.__dict__.items():
+      if v in self._invisible_nodes:
+        continue
       if isinstance(v, Module):
         _add_node_relative(self, k, v, _edges, gather, nodes)
       elif isinstance(v, module_list):
@@ -340,7 +391,7 @@ class module_list(list):
 
   >>> import braincore as bc
   >>> l = bc.module_list([bp.dnn.Dense(1, 2),
-  >>>                   bp.dnn.LSTMCell(2, 3)])
+  >>>                     bp.dnn.LSTMCell(2, 3)])
   """
 
   __module__ = 'braincore'
@@ -1373,6 +1424,7 @@ def register_delay_of_target(target: AllOfTypes[ExtendedUpdateWithBA, UpdateRetu
   return delay_cls
 
 
+@set_module_as('braincore')
 def call_order(level: int = 0):
   """The decorator for indicating the resetting level.
 
@@ -1389,7 +1441,7 @@ def call_order(level: int = 0):
   if level < 0:
     level = _max_order + level
   if level < 0 or level >= _max_order:
-    raise ValueError(f'"reset_level" must be an integer in [0, 10). but we got {level}')
+    raise ValueError(f'"call_order" must be an integer in [0, 10). but we got {level}')
 
   def wrap(fun: Callable):
     fun.call_order = level
@@ -1398,6 +1450,7 @@ def call_order(level: int = 0):
   return wrap
 
 
+@set_module_as('braincore')
 def init_states(target: Module, *args, **kwargs) -> Module:
   """
   Reset states of all children nodes in the given target.
@@ -1410,22 +1463,23 @@ def init_states(target: Module, *args, **kwargs) -> Module:
   """
   nodes_with_order = []
 
-  # reset node whose `reset_state` has no `reset_level`
+  # reset node whose `init_state` has no `call_order`
   for node in list(target.nodes().values()):
-    if not hasattr(node.reset_state, 'call_order'):
-      node.reset_state(*args, **kwargs)
+    if not hasattr(node.init_state, 'call_order'):
+      node.init_state(*args, **kwargs)
     else:
       nodes_with_order.append(node)
 
   # reset the node's states
   for l in range(_max_order):
     for node in nodes_with_order:
-      if node.reset_state.call_order == l:
-        node.reset_state(*args, **kwargs)
+      if node.init_state.call_order == l:
+        node.init_state(*args, **kwargs)
 
   return target
 
 
+@set_module_as('braincore')
 def load_states(target: Module, state_dict: Dict, **kwargs):
   """Copy parameters and buffers from :attr:`state_dict` into
   this module and its descendants.
@@ -1452,6 +1506,7 @@ def load_states(target: Module, state_dict: Dict, **kwargs):
   return StateLoadResult(missing_keys, unexpected_keys)
 
 
+@set_module_as('braincore')
 def save_states(target: Module, **kwargs) -> Dict:
   """Save all states in the ``target`` as a dictionary for later disk serialization.
 
@@ -1464,9 +1519,10 @@ def save_states(target: Module, **kwargs) -> Dict:
   return {key: node.save_state(**kwargs) for key, node in target.nodes().items()}
 
 
-def assign_states(target: Module, *state_by_abs_path: Dict):
+@set_module_as('braincore')
+def assign_state_values(target: Module, *state_by_abs_path: Dict):
   """
-  Assign states from the external objects.
+  Assign state values according to the given state dictionary.
 
   Parameters
   ----------

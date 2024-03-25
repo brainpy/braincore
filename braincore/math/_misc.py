@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from braincore import environ
+from braincore._common import set_module_as
 
 __all__ = [
   'get_dtype',
@@ -15,9 +16,12 @@ __all__ = [
   'clip_by_norm',
   'from_numpy',
   'as_numpy',
+  'tree_zeros_like',
+  'tree_ones_like',
 ]
 
 
+@set_module_as('braincore.math')
 def get_dtype(a):
   """
   Get the dtype of a.
@@ -37,6 +41,7 @@ def get_dtype(a):
       raise ValueError(f'Can not get dtype of {a}.')
 
 
+@set_module_as('braincore.math')
 def exprel(x):
   """
   Relative error exponential, ``(exp(x) - 1)/x``.
@@ -78,6 +83,7 @@ def exprel(x):
                    jnp.where(big, jnp.inf, origin))
 
 
+@set_module_as('braincore.math')
 def remove_diag(arr):
   """Remove the diagonal of the matrix.
 
@@ -97,12 +103,27 @@ def remove_diag(arr):
   return jnp.reshape(arr[eyes], (arr.shape[0], arr.shape[1] - 1))
 
 
+@set_module_as('braincore.math')
 def clip_by_norm(t, clip_norm, axis=None):
-  return jax.tree.map(lambda l: l * clip_norm / jnp.maximum(jnp.sqrt(jnp.sum(l * l, axis=axis, keepdims=True)),
-                                                            clip_norm),
-                      t)
+  """
+  Clip the tensor by the norm of the tensor.
+
+  Args:
+    t: The tensor to be clipped.
+    clip_norm: The maximum norm value.
+    axis: The axis to calculate the norm. If None, the norm is calculated over the whole tensor.
+
+  Returns:
+    The clipped tensor.
+
+  """
+  return jax.tree.map(
+    lambda l: l * clip_norm / jnp.maximum(jnp.sqrt(jnp.sum(l * l, axis=axis, keepdims=True)), clip_norm),
+    t
+  )
 
 
+@set_module_as('braincore.math')
 def flatten(
     input: jax.typing.ArrayLike,
     start_dim: Optional[int] = None,
@@ -150,6 +171,7 @@ def flatten(
   return jnp.reshape(input, new_shape)
 
 
+@set_module_as('braincore.math')
 def unflatten(x: jax.typing.ArrayLike, dim: int, sizes: Sequence[int]) -> jax.Array:
   """
   Expands a dimension of the input tensor over multiple dimensions.
@@ -173,9 +195,58 @@ def unflatten(x: jax.typing.ArrayLike, dim: int, sizes: Sequence[int]) -> jax.Ar
   return jnp.reshape(x, new_shape)
 
 
+@set_module_as('braincore.math')
 def from_numpy(x):
+  """
+  Convert the numpy array to jax array.
+
+  Args:
+    x: The numpy array.
+
+  Returns:
+    The jax array.
+  """
   return jnp.array(x)
 
 
+@set_module_as('braincore.math')
 def as_numpy(x):
+  """
+  Convert the array to numpy array.
+
+  Args:
+    x: The array.
+
+  Returns:
+    The numpy array.
+  """
   return np.array(x)
+
+
+@set_module_as('braincore.math')
+def tree_zeros_like(tree):
+  """
+  Create a tree with the same structure as the input tree, but with zeros in each leaf.
+
+  Args:
+    tree: The input tree.
+
+  Returns:
+    The tree with zeros in each leaf.
+  """
+  return jax.tree_map(jnp.zeros_like, tree)
+
+
+@set_module_as('braincore.math')
+def tree_ones_like(tree):
+  """
+  Create a tree with the same structure as the input tree, but with ones in each leaf.
+
+  Args:
+    tree: The input tree.
+
+  Returns:
+    The tree with ones in each leaf.
+
+  """
+  return jax.tree_map(jnp.ones_like, tree)

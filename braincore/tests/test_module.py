@@ -84,3 +84,26 @@ class TestVarDelay(unittest.TestCase):
       self.assertTrue(jnp.allclose(rotation_delay.at('b'), concat_delay.at('b'), ))
       self.assertTrue(jnp.allclose(rotation_delay.at('c'), concat_delay.at('c'), ))
     bc.clear_buffer_memory()
+
+
+class TestModule(unittest.TestCase):
+  def test_states(self):
+    class A(bc.Module):
+      def __init__(self):
+        super().__init__()
+        self.a = bc.State(bc.random.random(10, 20))
+        self.b = bc.State(bc.random.random(10, 20))
+
+    class B(bc.Module):
+      def __init__(self):
+        super().__init__()
+        self.a = A()
+        self.b = bc.State(bc.random.random(10, 20))
+
+    b = B()
+    print()
+    print(b.states())
+    print(b.states())
+    print(b.states(level=0))
+    print(b.states(level=0))
+

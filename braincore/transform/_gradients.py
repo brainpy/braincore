@@ -1,15 +1,16 @@
 import inspect
 from functools import partial, wraps
 
+import jax
 from jax import numpy as jnp
 from jax._src.api import _vjp
 from jax.api_util import argnums_partial
 from jax.extend import linear_util
-from jax.tree_util import (tree_flatten, tree_unflatten)
+
+from braincore._common import set_module_as
 
 __all__ = [
   'vector_grad',
-  'for_loop',
 ]
 
 
@@ -33,6 +34,7 @@ def _check_callable(fun):
     raise TypeError(f"Expected a function, got a generator function: {fun}")
 
 
+@set_module_as('braincore')
 def vector_grad(func, argnums=0, return_value: bool = False, has_aux: bool = False):
   """
    Compute the gradient of a vector with respect to the input.
@@ -47,8 +49,8 @@ def vector_grad(func, argnums=0, return_value: bool = False, has_aux: bool = Fal
       y, vjp_fn, aux = _vjp(f_partial, *dyn_args, has_aux=True)
     else:
       y, vjp_fn = _vjp(f_partial, *dyn_args, has_aux=False)
-    leaves, tree = tree_flatten(y)
-    tangents = tree_unflatten(tree, [jnp.ones(l.shape, dtype=l.dtype) for l in leaves])
+    leaves, tree = jax.tree.flatten(y)
+    tangents = jax.tree.unflatten(tree, [jnp.ones(l.shape, dtype=l.dtype) for l in leaves])
     grads = vjp_fn(tangents)
     if isinstance(argnums, int):
       grads = grads[0]
@@ -59,12 +61,3 @@ def vector_grad(func, argnums=0, return_value: bool = False, has_aux: bool = Fal
 
   return grad_fun
 
-
-vector_grad.__module__ = 'braincore'
-
-
-def for_loop():
-  pass
-
-
-for_loop.__module__ = 'braincore'

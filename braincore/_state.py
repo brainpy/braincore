@@ -5,14 +5,15 @@ import jax
 from ._utils import Stack
 
 __all__ = [
-  'State', 'ParamState', 'StateStack',
+  'State', 'ShortTermState', 'LongTermState', 'ParamState',
+  'StateStack', 'visible_state_dict',
 ]
 
 PyTree = Any
 _pytree_registered_objects = set()
 
 
-def register_pytree_cls(cls):
+def _register_pytree_cls(cls):
   if cls not in _pytree_registered_objects:
     jax.tree_util.register_pytree_node_class(cls)
     _pytree_registered_objects.add(cls)
@@ -33,7 +34,7 @@ class State(object):
       value = value.value
     self._value = value
     self._tree = jax.tree.structure(value)
-    register_pytree_cls(self.__class__)
+    _register_pytree_cls(self.__class__)
 
   @property
   def value(self):
@@ -80,7 +81,28 @@ class State(object):
     return f'{self.__class__.__name__}({self._value})'
 
 
-class ParamState(State):
+class ShortTermState(State):
+  """
+  The short-term state, which is used to store the short-term data in the program.
+
+  For example, in a training process, the gradients of the model are short-term states.
+  """
+
+  __module__ = 'braincore'
+
+
+class LongTermState(State):
+  """
+  The long-term state, which is used to store the long-term data in the program.
+
+  For example, in a training process, the weights of the model are long-term states.
+
+  """
+
+  __module__ = 'braincore'
+
+
+class ParamState(LongTermState):
   __module__ = 'braincore'
 
 
@@ -136,7 +158,14 @@ class StateStack(Stack):
     self[key].value = value
 
 
-def stack_compose(first: dict, *others: dict):
+class visible_state_dict(StateStack):
+  """
+  The state dictionary whose elements are visible to ``.states()`` collection functions.
+  """
+  pass
+
+
+def sate_compose(first: dict, *others: dict):
   """
   Compose multiple dictionaries as a ``Stack``.
 

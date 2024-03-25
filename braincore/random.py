@@ -21,7 +21,7 @@ from jax.experimental.host_callback import call
 
 from braincore import environ
 from ._state import State
-from ._utils import jit_error
+from .transform._jit_error import jit_error
 
 Size = Union[int, Sequence[int]]
 SeedOrKey = Union[int, jax.Array, np.ndarray]
@@ -1312,7 +1312,7 @@ def random_integers(low,
   To sample from N evenly spaced floating-point numbers between a and b,
   use::
 
-    a + (b - a) * (bc.random.random_integers(N) - 1) / (N - 1.)
+    a + (b - a) * (braincore.random.random_integers(N) - 1) / (N - 1.)
 
   Examples
   --------
@@ -1394,7 +1394,7 @@ def randn(*dn, key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
   -----
   For random samples from :math:`N(\mu, \sigma^2)`, use:
 
-  ``sigma * bc.random.randn(...) + mu``
+  ``sigma * braincore.random.randn(...) + mu``
 
   Examples
   --------
@@ -1960,7 +1960,7 @@ def laplace(loc=None, scale=None, size: Optional[Size] = None,
   Draw samples from the distribution
 
   >>> loc, scale = 0., 1.
-  >>> s = bc.random.laplace(loc, scale, 1000)
+  >>> s = braincore.random.laplace(loc, scale, 1000)
 
   Display the histogram of the samples, along with
   the probability density function:
@@ -2040,7 +2040,7 @@ def logistic(loc=None, scale=None, size: Optional[Size] = None,
   Draw samples from the distribution:
 
   >>> loc, scale = 10, 1
-  >>> s = bc.random.logistic(loc, scale, 10000)
+  >>> s = braincore.random.logistic(loc, scale, 10000)
   >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s, bins=50)
 
@@ -2122,7 +2122,7 @@ def normal(loc=None, scale=None, size: Optional[Size] = None,
   Draw samples from the distribution:
 
   >>> mu, sigma = 0, 0.1 # mean and standard deviation
-  >>> s = bc.random.normal(mu, sigma, 1000)
+  >>> s = braincore.random.normal(mu, sigma, 1000)
 
   Verify the mean and the variance:
 
@@ -2145,7 +2145,7 @@ def normal(loc=None, scale=None, size: Optional[Size] = None,
   Two-by-four array of samples from the normal distribution with
   mean 3 and standard deviation 2.5:
 
-  >>> bc.random.normal(3, 2.5, size=(2, 4))
+  >>> braincore.random.normal(3, 2.5, size=(2, 4))
   array([[-4.49401501,  4.00950034, -1.81814867,  7.29718677],   # random
          [ 0.39924804,  4.68456316,  4.99394529,  4.84057254]])  # random
   """
@@ -2233,7 +2233,7 @@ def pareto(a, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, dtyp
   Draw samples from the distribution:
 
   >>> a, m = 3., 2.  # shape and mode
-  >>> s = (bc.random.pareto(a, 1000) + 1) * m
+  >>> s = (braincore.random.pareto(a, 1000) + 1) * m
 
   Display the histogram of the samples, along with the probability
   density function:
@@ -2302,7 +2302,7 @@ def poisson(lam=1.0, size: Optional[Size] = None, key: Optional[SeedOrKey] = Non
   Draw samples from the distribution:
 
   >>> import numpy as np
-  >>> s = bc.random.poisson(5, 10000)
+  >>> s = braincore.random.poisson(5, 10000)
 
   Display histogram of the sample:
 
@@ -2312,7 +2312,7 @@ def poisson(lam=1.0, size: Optional[Size] = None, key: Optional[SeedOrKey] = Non
 
   Draw each 100 values for lambda 100 and 500:
 
-  >>> s = bc.random.poisson(lam=(100., 500.), size=(100, 2))
+  >>> s = braincore.random.poisson(lam=(100., 500.), size=(100, 2))
   """
   return DEFAULT.poisson(lam, size, key=key, dtype=dtype)
 
@@ -2374,7 +2374,7 @@ def standard_cauchy(size: Optional[Size] = None, key: Optional[SeedOrKey] = None
   Draw samples and plot the distribution:
 
   >>> import matplotlib.pyplot as plt  # noqa
-  >>> s = bc.random.standard_cauchy(1000000)
+  >>> s = braincore.random.standard_cauchy(1000000)
   >>> s = s[(s>-25) & (s<25)]  # truncate distribution so it plots well
   >>> plt.hist(s, bins=100)
   >>> plt.show()
@@ -2410,7 +2410,7 @@ def standard_exponential(size: Optional[Size] = None,
   --------
   Output a 3x8000 array:
 
-  >>> n = bc.random.standard_exponential((3, 8000))
+  >>> n = braincore.random.standard_exponential((3, 8000))
   """
   return DEFAULT.standard_exponential(size, key=key, dtype=dtype)
 
@@ -2473,7 +2473,7 @@ def standard_gamma(shape, size: Optional[Size] = None,
   Draw samples from the distribution:
 
   >>> shape, scale = 2., 1. # mean and width
-  >>> s = bc.random.standard_gamma(shape, 1000000)
+  >>> s = braincore.random.standard_gamma(shape, 1000000)
 
   Display the histogram of the samples, along with
   the probability density function:
@@ -2520,28 +2520,28 @@ def standard_normal(size: Optional[Size] = None, key: Optional[SeedOrKey] = None
   For random samples from the normal distribution with mean ``mu`` and
   standard deviation ``sigma``, use one of::
 
-      mu + sigma * bc.random.standard_normal(size=...)
-      bc.random.normal(mu, sigma, size=...)
+      mu + sigma * braincore.random.standard_normal(size=...)
+      braincore.random.normal(mu, sigma, size=...)
 
   Examples
   --------
-  >>> bc.random.standard_normal()
+  >>> braincore.random.standard_normal()
   2.1923875335537315 #random
 
-  >>> s = bc.random.standard_normal(8000)
+  >>> s = braincore.random.standard_normal(8000)
   >>> s
   array([ 0.6888893 ,  0.78096262, -0.89086505, ...,  0.49876311,  # random
          -0.38672696, -0.4685006 ])                                # random
   >>> s.shape
   (8000,)
-  >>> s = bc.random.standard_normal(size=(3, 4, 2))
+  >>> s = braincore.random.standard_normal(size=(3, 4, 2))
   >>> s.shape
   (3, 4, 2)
 
   Two-by-four array of samples from the normal distribution with
   mean 3 and standard deviation 2.5:
 
-  >>> 3 + 2.5 * bc.random.standard_normal(size=(2, 4))
+  >>> 3 + 2.5 * braincore.random.standard_normal(size=(2, 4))
   array([[-4.49401501,  4.00950034, -1.81814867,  7.29718677],   # random
          [ 0.39924804,  4.68456316,  4.99394529,  4.84057254]])  # random
   """
@@ -2632,7 +2632,7 @@ def standard_t(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None,
   degrees of freedom.
 
   >>> import matplotlib.pyplot as plt  # noqa
-  >>> s = bc.random.standard_t(10, size=1000000)
+  >>> s = braincore.random.standard_t(10, size=1000000)
   >>> h = plt.hist(s, bins=100, density=True)
 
   Does our t statistic land in one of the two critical regions found at
@@ -2722,7 +2722,7 @@ def uniform(low=0.0, high=1.0, size: Optional[Size] = None,
   --------
   Draw samples from the distribution:
 
-  >>> s = bc.random.uniform(-1,0,1000)
+  >>> s = braincore.random.uniform(-1,0,1000)
 
   All values are within the given interval:
 
@@ -2898,7 +2898,7 @@ def lognormal(mean=None, sigma=None, size: Optional[Size] = None,
   Draw samples from the distribution:
 
   >>> mu, sigma = 3., 1. # mean and standard deviation
-  >>> s = bc.random.lognormal(mu, sigma, 1000)
+  >>> s = braincore.random.lognormal(mu, sigma, 1000)
 
   Display the histogram of the samples, along with
   the probability density function:
@@ -2922,7 +2922,7 @@ def lognormal(mean=None, sigma=None, size: Optional[Size] = None,
   >>> # values, drawn from a normal distribution.
   >>> b = []
   >>> for i in range(1000):
-  ...    a = 10. + bc.random.standard_normal(100)
+  ...    a = 10. + braincore.random.standard_normal(100)
   ...    b.append(np.product(a))
 
   >>> b = np.array(b) / np.min(b) # scale values to be positive
@@ -3012,7 +3012,7 @@ def binomial(n, p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None,
   Draw samples from the distribution:
 
   >>> n, p = 10, .5  # number of trials, probability of each trial
-  >>> s = bc.random.binomial(n, p, 1000)
+  >>> s = braincore.random.binomial(n, p, 1000)
   # result of flipping a coin 10 times, tested 1000 times.
 
   A real world example. A company drills 9 wild-cat oil exploration
@@ -3022,7 +3022,7 @@ def binomial(n, p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None,
   Let's do 20,000 trials of the model, and count the number that
   generate zero positive results.
 
-  >>> sum(bc.random.binomial(9, 0.1, 20000) == 0)/20000.
+  >>> sum(braincore.random.binomial(9, 0.1, 20000) == 0)/20000.
   # answer = 0.38885, or 38%.
   """
   return DEFAULT.binomial(n, p, size, key=key, dtype=dtype)
@@ -3088,7 +3088,7 @@ def chisquare(df, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, 
 
   Examples
   --------
-  >>> bc.random.chisquare(2,4)
+  >>> braincore.random.chisquare(2,4)
   array([ 1.89920014,  9.00867716,  3.13710533,  5.62318272]) # random
   """
   return DEFAULT.chisquare(df, size, key=key, dtype=dtype)
@@ -3163,7 +3163,7 @@ def dirichlet(alpha, size: Optional[Size] = None, key: Optional[SeedOrKey] = Non
   average length, but allowing some variation in the relative sizes of
   the pieces.
 
-  >>> s = bc.random.dirichlet((10, 5, 3), 20).transpose()
+  >>> s = braincore.random.dirichlet((10, 5, 3), 20).transpose()
 
   >>> import matplotlib.pyplot as plt  # noqa
   >>> plt.barh(range(20), s[0])
@@ -3213,7 +3213,7 @@ def geometric(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, d
   Draw ten thousand values from the geometric distribution,
   with the probability of an individual success equal to 0.35:
 
-  >>> z = bc.random.geometric(p=0.35, size=10000)
+  >>> z = braincore.random.geometric(p=0.35, size=10000)
 
   How many trials succeeded after a single run?
 
@@ -3295,7 +3295,7 @@ def f(dfnum, dfden, size: Optional[Size] = None, key: Optional[SeedOrKey] = None
 
   >>> dfnum = 1. # between group degrees of freedom
   >>> dfden = 48. # within groups degrees of freedom
-  >>> s = bc.random.f(dfnum, dfden, 1000)
+  >>> s = braincore.random.f(dfnum, dfden, 1000)
 
   The lower bound for the top 1% of the samples is :
 
@@ -3388,7 +3388,7 @@ def hypergeometric(ngood, nbad, nsample, size: Optional[Size] = None,
 
   >>> ngood, nbad, nsamp = 100, 2, 10
   # number of good, number of bad, and number of samples
-  >>> s = bc.random.hypergeometric(ngood, nbad, nsamp, 1000)
+  >>> s = braincore.random.hypergeometric(ngood, nbad, nsamp, 1000)
   >>> from matplotlib.pyplot import hist  # noqa
   >>> hist(s)
   #   note that it is very unlikely to grab both bad items
@@ -3397,7 +3397,7 @@ def hypergeometric(ngood, nbad, nsample, size: Optional[Size] = None,
   If you pull 15 marbles at random, how likely is it that
   12 or more of them are one color?
 
-  >>> s = bc.random.hypergeometric(15, 15, 15, 100000)
+  >>> s = braincore.random.hypergeometric(15, 15, 15, 100000)
   >>> sum(s>=12)/100000. + sum(s<=3)/100000.
   #   answer = 0.003 ... pretty unlikely!
   """
@@ -3467,7 +3467,7 @@ def logseries(p, size: Optional[Size] = None, key: Optional[SeedOrKey] = None, d
   Draw samples from the distribution:
 
   >>> a = .6
-  >>> s = bc.random.logseries(a, 10000)
+  >>> s = braincore.random.logseries(a, 10000)
   >>> import matplotlib.pyplot as plt  # noqa
   >>> count, bins, ignored = plt.hist(s)
 
@@ -3525,14 +3525,14 @@ def multinomial(n, pvals, size: Optional[Size] = None,
   --------
   Throw a dice 20 times:
 
-  >>> bc.random.multinomial(20, [1/6.]*6, size=1)
+  >>> braincore.random.multinomial(20, [1/6.]*6, size=1)
   array([[4, 1, 7, 5, 2, 1]]) # random
 
   It landed 4 times on 1, once on 2, etc.
 
   Now, throw the dice 20 times, and 20 times again:
 
-  >>> bc.random.multinomial(20, [1/6.]*6, size=2)
+  >>> braincore.random.multinomial(20, [1/6.]*6, size=2)
   array([[3, 4, 3, 3, 4, 3], # random
          [2, 4, 3, 4, 0, 7]])
 
@@ -3541,7 +3541,7 @@ def multinomial(n, pvals, size: Optional[Size] = None,
 
   A loaded die is more likely to land on number 6:
 
-  >>> bc.random.multinomial(100, [1/7.]*5 + [2/7.])
+  >>> braincore.random.multinomial(100, [1/7.]*5 + [2/7.])
   array([11, 16, 14, 17, 16, 26]) # random
 
   The probability inputs should be normalized. As an implementation
@@ -3550,12 +3550,12 @@ def multinomial(n, pvals, size: Optional[Size] = None,
   A biased coin which has twice as much weight on one side as on the
   other should be sampled like so:
 
-  >>> bc.random.multinomial(100, [1.0 / 3, 2.0 / 3])  # RIGHT
+  >>> braincore.random.multinomial(100, [1.0 / 3, 2.0 / 3])  # RIGHT
   array([38, 62]) # random
 
   not like:
 
-  >>> bc.random.multinomial(100, [1.0, 2.0])  # WRONG
+  >>> braincore.random.multinomial(100, [1.0, 2.0])  # WRONG
   Traceback (most recent call last):
   ValueError: pvals < 0, pvals > 1 or pvals contains NaNs
   """
@@ -3591,6 +3591,8 @@ def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'c
   key : PRNGKey, optional
       The key for the random number generator. If not given, the
       default random number generator is used.
+  dtype : data-type, optional
+      The desired data-type for the output. Default is `float32`.
 
   Returns
   -------
@@ -3631,7 +3633,7 @@ def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'c
   Diagonal covariance means that points are oriented along x or y-axis:
 
   >>> import matplotlib.pyplot as plt  # noqa
-  >>> x, y = bc.random.multivariate_normal(mean, cov, 5000).T
+  >>> x, y = braincore.random.multivariate_normal(mean, cov, 5000).T
   >>> plt.plot(x, y, 'x')
   >>> plt.axis('equal')
   >>> plt.show()
@@ -3651,7 +3653,7 @@ def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'c
   --------
   >>> mean = (1, 2)
   >>> cov = [[1, 0], [0, 1]]
-  >>> x = bc.random.multivariate_normal(mean, cov, (3, 3))
+  >>> x = braincore.random.multivariate_normal(mean, cov, (3, 3))
   >>> x.shape
   (3, 3, 2)
 
@@ -3662,7 +3664,7 @@ def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'c
   coefficient is -3/sqrt(6*3.5) ≈ -0.65465.
 
   >>> cov = np.array([[6, -3], [-3, 3.5]])
-  >>> pts = bc.random.multivariate_normal([0, 0], cov, size=800)
+  >>> pts = braincore.random.multivariate_normal([0, 0], cov, size=800)
 
   Check that the mean, covariance, and correlation coefficient of the
   sample are close to the expected values:
@@ -3689,7 +3691,8 @@ def multivariate_normal(mean, cov, size: Optional[Size] = None, method: str = 'c
 
 
 def negative_binomial(n, p, size: Optional[Size] = None,
-                      key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
+                      key: Optional[SeedOrKey] = None,
+                      dtype: DTypeLike = None):
   r"""
   Draw samples from a negative binomial distribution.
 
@@ -3755,7 +3758,7 @@ def negative_binomial(n, p, size: Optional[Size] = None,
   for each successive well, that is what is the probability of a
   single success after drilling 5 wells, after 6 wells, etc.?
 
-  >>> s = bc.random.negative_binomial(1, 0.1, 100000)
+  >>> s = braincore.random.negative_binomial(1, 0.1, 100000)
   >>> for i in range(1, 11): # doctest: +SKIP
   ...    probability = sum(s<i) / 100000.
   ...    print(i, "wells drilled, probability of one success =", probability)
@@ -3764,7 +3767,8 @@ def negative_binomial(n, p, size: Optional[Size] = None,
 
 
 def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
-                         key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
+                         key: Optional[SeedOrKey] = None,
+                         dtype: DTypeLike = None):
   r"""
   Draw samples from a noncentral chi-square distribution.
 
@@ -3812,7 +3816,7 @@ def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
   Draw values from the distribution and plot the histogram
 
   >>> import matplotlib.pyplot as plt  # noqa
-  >>> values = plt.hist(bc.random.noncentral_chisquare(3, 20, 100000),
+  >>> values = plt.hist(braincore.random.noncentral_chisquare(3, 20, 100000),
   ...                   bins=200, density=True)
   >>> plt.show()
 
@@ -3820,9 +3824,9 @@ def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
   and compare to a chisquare.
 
   >>> plt.figure()
-  >>> values = plt.hist(bc.random.noncentral_chisquare(3, .0000001, 100000),
+  >>> values = plt.hist(braincore.random.noncentral_chisquare(3, .0000001, 100000),
   ...                   bins=np.arange(0., 25, .1), density=True)
-  >>> values2 = plt.hist(bc.random.chisquare(3, 100000),
+  >>> values2 = plt.hist(braincore.random.chisquare(3, 100000),
   ...                    bins=np.arange(0., 25, .1), density=True)
   >>> plt.plot(values[1][0:-1], values[0]-values2[0], 'ob')
   >>> plt.show()
@@ -3831,7 +3835,7 @@ def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
   distribution.
 
   >>> plt.figure()
-  >>> values = plt.hist(bc.random.noncentral_chisquare(3, 20, 100000),
+  >>> values = plt.hist(braincore.random.noncentral_chisquare(3, 20, 100000),
   ...                   bins=200, density=True)
   >>> plt.show()
   """
@@ -3839,7 +3843,8 @@ def noncentral_chisquare(df, nonc, size: Optional[Size] = None,
 
 
 def noncentral_f(dfnum, dfden, nonc, size: Optional[Size] = None,
-                 key: Optional[SeedOrKey] = None, dtype: DTypeLike = None):
+                 key: Optional[SeedOrKey] = None,
+                 dtype: DTypeLike = None):
   r"""
   Draw samples from the noncentral F distribution.
 
@@ -3899,9 +3904,9 @@ def noncentral_f(dfnum, dfden, nonc, size: Optional[Size] = None,
   >>> dfnum = 3 # between group deg of freedom
   >>> dfden = 20 # within groups degrees of freedom
   >>> nonc = 3.0
-  >>> nc_vals = bc.random.noncentral_f(dfnum, dfden, nonc, 1000000)
+  >>> nc_vals = braincore.random.noncentral_f(dfnum, dfden, nonc, 1000000)
   >>> NF = np.histogram(nc_vals, bins=50, density=True)
-  >>> c_vals = bc.random.f(dfnum, dfden, 1000000)
+  >>> c_vals = braincore.random.f(dfnum, dfden, 1000000)
   >>> F = np.histogram(c_vals, bins=50, density=True)
   >>> import matplotlib.pyplot as plt  # noqa
   >>> plt.plot(F[1][1:], F[0])
@@ -3973,7 +3978,7 @@ def power(a,
 
   >>> a = 5. # shape
   >>> samples = 1000
-  >>> s = bc.random.power(a, samples)
+  >>> s = braincore.random.power(a, samples)
 
   Display the histogram of the samples, along with
   the probability density function:
@@ -3989,20 +3994,20 @@ def power(a,
   Compare the power function distribution to the inverse of the Pareto.
 
   >>> from scipy import stats # doctest: +SKIP
-  >>> rvs = bc.random.power(5, 1000000)
-  >>> rvsp = bc.random.pareto(5, 1000000)
+  >>> rvs = braincore.random.power(5, 1000000)
+  >>> rvsp = braincore.random.pareto(5, 1000000)
   >>> xx = np.linspace(0,1,100)
   >>> powpdf = stats.powerlaw.pdf(xx,5)  # doctest: +SKIP
 
   >>> plt.figure()
   >>> plt.hist(rvs, bins=50, density=True)
   >>> plt.plot(xx,powpdf,'r-')  # doctest: +SKIP
-  >>> plt.title('bc.random.power(5)')
+  >>> plt.title('braincore.random.power(5)')
 
   >>> plt.figure()
   >>> plt.hist(1./(1.+rvsp), bins=50, density=True)
   >>> plt.plot(xx,powpdf,'r-')  # doctest: +SKIP
-  >>> plt.title('inverse of 1 + bc.random.pareto(5)')
+  >>> plt.title('inverse of 1 + braincore.random.pareto(5)')
 
   >>> plt.figure()
   >>> plt.hist(1./(1.+rvsp), bins=50, density=True)
@@ -4063,7 +4068,7 @@ def rayleigh(scale=1.0,
   Draw values from the distribution and plot the histogram
 
   >>> from matplotlib.pyplot import hist  # noqa
-  >>> values = hist(bc.random.rayleigh(3, 100000), bins=200, density=True)
+  >>> values = hist(braincore.random.rayleigh(3, 100000), bins=200, density=True)
 
   Wave heights tend to follow a Rayleigh distribution. If the mean wave
   height is 1 meter, what fraction of waves are likely to be larger than 3
@@ -4071,7 +4076,7 @@ def rayleigh(scale=1.0,
 
   >>> meanvalue = 1
   >>> modevalue = np.sqrt(2 / np.pi) * meanvalue
-  >>> s = bc.random.rayleigh(modevalue, 1000000)
+  >>> s = braincore.random.rayleigh(modevalue, 1000000)
 
   The percentage of waves larger than 3 meters is:
 
@@ -4134,7 +4139,7 @@ def triangular(size: Optional[Size] = None,
   Draw values from the distribution and plot the histogram:
 
   >>> import matplotlib.pyplot as plt  # noqa
-  >>> h = plt.hist(bc.random.triangular(-3, 0, 8, 100000), bins=200,
+  >>> h = plt.hist(braincore.random.triangular(-3, 0, 8, 100000), bins=200,
   ...              density=True)
   >>> plt.show()
   """
@@ -4210,7 +4215,7 @@ def vonmises(mu,
   Draw samples from the distribution:
 
   >>> mu, kappa = 0.0, 4.0 # mean and dispersion
-  >>> s = bc.random.vonmises(mu, kappa, 1000)
+  >>> s = braincore.random.vonmises(mu, kappa, 1000)
 
   Display the histogram of the samples, along with
   the probability density function:
@@ -4290,7 +4295,7 @@ def wald(mean,
   Draw values from the distribution and plot the histogram:
 
   >>> import matplotlib.pyplot as plt  # noqa
-  >>> h = plt.hist(bc.random.wald(3, 2, 100000), bins=200, density=True)
+  >>> h = plt.hist(braincore.random.wald(3, 2, 100000), bins=200, density=True)
   >>> plt.show()
   """
   return DEFAULT.wald(mean, scale, size, key=key, dtype=dtype)
