@@ -19,6 +19,11 @@ def _register_pytree_cls(cls):
     _pytree_registered_objects.add(cls)
 
 
+
+state_stack_list = []
+
+
+
 class State(object):
   """
   The pointer to specify the dynamical state.
@@ -41,12 +46,16 @@ class State(object):
     """
     The data and its value.
     """
+    for stack in state_stack_list:
+      stack.add_read(self)
     return self._value
 
   @value.setter
   def value(self, v):
     v = v.value if isinstance(v, State) else v
     self.__check_value(v)
+    for stack in state_stack_list:
+      stack.add_write(self)
     self._value = v
 
   def __check_value(self, v):
@@ -163,6 +172,29 @@ class visible_state_dict(StateStack):
   The state dictionary whose elements are visible to ``.states()`` collection functions.
   """
   pass
+
+
+class state_auto_stack(object):
+  """
+  The auto stack, which is used to store the states automatically.
+  """
+
+  def __init__(self):
+    self.reads = StateStack()
+    self.writes = StateStack()
+
+  def __enter__(self) -> 'state_auto_stack':
+    state_stack_list.append(self)
+    return self
+
+  def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+    state_stack_list.pop()
+
+  def add_read(self, state: State) -> None:
+    self.reads.add(state)
+
+  def add_write(self, state: State) -> None:
+    self.writes.add(state)
 
 
 def sate_compose(first: dict, *others: dict):
