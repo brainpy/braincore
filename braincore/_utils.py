@@ -15,7 +15,7 @@ __all__ = [
   'clear_buffer_memory',
   'not_instance_eval',
   'is_instance_eval',
-  'Stack',
+  'DictManager',
   'MemScaling',
   'IdMemScaling',
 ]
@@ -87,17 +87,16 @@ def clear_name_cache(ignore_warn: bool = True):
     warnings.warn(f'All named models and their ids are cleared.', UserWarning)
 
 
-
 @set_module_as('braincore')
 @jax.tree_util.register_pytree_node_class
-class Stack(dict):
+class DictManager(dict):
   """
-  Stack, for collecting all pytree used in the program.
+  DictManager, for collecting all pytree used in the program.
 
-  :py:class:`~.Stack` supports all features of python dict.
+  :py:class:`~.DictManager` supports all features of python dict.
   """
 
-  def subset(self, sep: Union[type, Tuple[type, ...], Callable]) -> 'Stack':
+  def subset(self, sep: Union[type, Tuple[type, ...], Callable]) -> 'DictManager':
     """
     Get a new stack with the subset of keys.
     """
@@ -113,7 +112,7 @@ class Stack(dict):
           gather[k] = v
     return gather
 
-  def not_subset(self, sep: Union[type, Tuple[type, ...]]) -> 'Stack':
+  def not_subset(self, sep: Union[type, Tuple[type, ...]]) -> 'DictManager':
     """
     Get a new stack with the subset of keys.
     """
@@ -132,7 +131,7 @@ class Stack(dict):
     else:
       self[key] = var
 
-  def unique(self) -> 'Stack':
+  def unique(self) -> 'DictManager':
     """
     Get a new type of collections with unique values.
 
@@ -156,7 +155,7 @@ class Stack(dict):
       for k, v in arg.items():
         self[k] = v
 
-  def split(self, first: type, *others: type) -> Tuple['Stack', ...]:
+  def split(self, first: type, *others: type) -> Tuple['DictManager', ...]:
     """
     Split the stack into subsets of stack by the given types.
     """

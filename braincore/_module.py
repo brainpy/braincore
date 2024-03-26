@@ -39,8 +39,8 @@ import numpy as np
 
 from . import environ, share
 from ._common import set_module_as
-from ._state import State, StateStack, visible_state_dict
-from ._utils import unique_name, Stack, get_unique_name, DotDict
+from ._state import State, StateManager, visible_state_dict
+from ._utils import unique_name, DictManager, get_unique_name, DotDict
 from .math import get_dtype
 from .mixin import Mixin, Mode, ParamDesc, AllOfTypes, Batching, UpdateReturn
 from .transform import jit_error
@@ -154,7 +154,7 @@ class Module(object):
       level: int = -1,
       include_self: bool = True,
       unique: bool = True,
-  ) -> StateStack:
+  ) -> StateManager:
     """
     Collect all states in this node and the children nodes.
 
@@ -173,7 +173,7 @@ class Module(object):
 
     Returns
     -------
-    states : StateStack
+    states : StateManager
       The collection contained (the path, the variable).
     """
 
@@ -186,7 +186,7 @@ class Module(object):
     nodes = self.nodes(method=method, level=level, include_self=include_self)
 
     # get the state stack
-    states = StateStack()
+    states = StateManager()
     _state_id = set()
     for node_path, node in nodes.items():
       for k in node.__dict__.keys():
@@ -215,7 +215,7 @@ class Module(object):
       method: str = 'absolute',
       level: int = -1,
       include_self: bool = True
-  ) -> Stack:
+  ) -> DictManager:
     """
     Collect all children nodes.
 
@@ -230,7 +230,7 @@ class Module(object):
 
     Returns
     -------
-    gather : Stack
+    gather : DictManager
       The collection contained (the path, the node).
     """
     return _find_nodes(self, method=method, level=level, include_self=include_self)
@@ -281,10 +281,10 @@ class Module(object):
     return unexpected_keys, missing_keys
 
 
-def _find_nodes(self, method: str = 'absolute', level=-1, include_self=True, _lid=0, _edges=None) -> Stack:
+def _find_nodes(self, method: str = 'absolute', level=-1, include_self=True, _lid=0, _edges=None) -> DictManager:
   if _edges is None:
     _edges = set()
-  gather = Stack()
+  gather = DictManager()
   if include_self:
     if method == 'absolute':
       gather[self.name] = self

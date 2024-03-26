@@ -9,7 +9,7 @@ from jax.api_util import argnums_partial
 from jax.extend import linear_util
 
 from braincore._common import set_module_as
-from braincore._state import State, StateStack, state_auto_stack
+from braincore._state import State, state_tracing
 
 __all__ = [
   'vector_grad',
@@ -162,49 +162,12 @@ class GradientTransform(object):
     self.target = target
 
     # transform
-    self._states_to_be_written: StateStack = None
+    self._states_to_be_written: tuple = None
     _grad_setting = dict() if transform_params is None else transform_params
     if self._has_aux:
-      self._transform = transform(
-        self._f_grad_with_aux_to_transform,
-        argnums=self._argnums,
-        has_aux=True,
-        **_grad_setting
-      )
+      self._transform = transform(self._fun_with_aux, argnums=self._argnums, has_aux=True, **_grad_setting)
     else:
-      self._transform = transform(
-        self._f_grad_without_aux_to_transform,
-        argnums=self._argnums,
-        has_aux=True,
-        **_grad_setting
-      )
-
-  def _f_grad_with_aux_to_transform(self,
-                                    grad_values: tuple,
-                                    *args,
-                                    **kwargs):
-    for v, d in zip(self._grad_vars, grad_values):
-      v._value = d
-    # Users should return the auxiliary data like::
-    # >>> # 1. example of return one data
-    # >>> return scalar_loss, data
-    # >>> # 2. example of return multiple data
-    # >>> return scalar_loss, (data1, data2, ...)
-    outputs = self.target(*args, **kwargs)
-    # outputs: [0] is the value for gradient,
-    #          [1] is other values for return
-    return outputs[0], (outputs, [v.value for v in self._grad_vars], self._states_to_be_written.collect_values())
-
-  def _f_grad_without_aux_to_transform(self,
-                                       grad_values: tuple,
-                                       *args,
-                                       **kwargs):
-    for v, d in zip(self._grad_vars, grad_values):
-      v._value = d
-    # Users should return the scalar value like this::
-    # >>> return scalar_loss
-    output = self.target(*args, **kwargs)
-    return output, (output, [v.value for v in self._grad_vars], self._states_to_be_written.collect_values())
+      self._transform = transform(self._fun_without_aux, argnums=self._argnums, has_aux=True, **_grad_setting)
 
   def __repr__(self):
     name = self.__class__.__name__
@@ -213,12 +176,44 @@ class GradientTransform(object):
                   f'{" " * len(name)} num_of_dyn_vars={len(self._states_to_be_written)})')
     return format_ref
 
-  def _return(self, rets):
-    grads, (outputs, new_grad_vs, new_dyn_vs) = rets
-    for v, d in zip(self._grad_vars, new_grad_vs):
-      v.value = d
-    for k in new_dyn_vs.keys():
-      self._states_to_be_written[k].value = new_dyn_vs[k]
+  def __call_target(self, *args, **kwargs):
+    if self._states_to_be_written is None:
+      with state_tracing() as stack:
+        output = self.target(*args, **kwargs)
+        self._states_to_be_written = tuple(stack.writes)
+    else:
+      output = self.target(*args, **kwargs)
+    return output
+
+  def _fun_with_aux(self, grad_values: tuple, *args, **kwargs):
+    for v, d in zip(self._grad_vars, grad_values):
+      v._value = d
+    # Users should return the auxiliary data like::
+    # >>> # 1. example of return one data
+    # >>> return scalar_loss, data
+    # >>> # 2. example of return multiple data
+    # >>> return scalar_loss, (data1, data2, ...)
+    outs = self.__call_target(*args, **kwargs)
+    # outputs: [0] is the value for gradient,
+    #          [1] is other values for return
+    assert self._states_to_be_written is not None, "The states to be written should be collected."
+    return outs[0], (outs, [v.value for v in self._grad_vars], [v.value for v in self._states_to_be_written])
+
+  def _fun_without_aux(self, grad_values: tuple, *args, **kwargs):
+    for v, d in zip(self._grad_vars, grad_values):
+      v._value = d
+    # Users should return the scalar value like this::
+    # >>> return scalar_loss
+    out = self.__call_target(*args, **kwargs)
+    assert self._states_to_be_written is not None, "The states to be written should be collected."
+    return out, (out, [v.value for v in self._grad_vars], [v.value for v in self._states_to_be_written])
+
+  def __return(self, rets):
+    grads, (outputs, new_grad_vals, new_dyn_vals) = rets
+    for i, val in enumerate(new_grad_vals):
+      self._grad_vars[i].value = val
+    for i, val in enumerate(new_dyn_vals):
+      self._states_to_be_written[i].value = val
 
     # check returned grads
     if len(self._grad_vars) > 0:
@@ -246,13 +241,8 @@ class GradientTransform(object):
         return grads
 
   def __call__(self, *args, **kwargs):
-    if self._states_to_be_written is None:
-      with state_auto_stack() as stack:
-        rets = self._transform(*args, **kwargs)
-        self._states_to_be_written = stack.writes
-    else:
-      rets = self._transform([v.value for v in self._grad_vars], *args, **kwargs)
-    return self._return(rets)
+    rets = self._transform([v.value for v in self._grad_vars], *args, **kwargs)
+    return self.__return(rets)
 
 
 @set_module_as("braincore.transform")

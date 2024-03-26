@@ -2,11 +2,11 @@ from typing import Any, Tuple, Dict
 
 import jax
 
-from ._utils import Stack
+from ._utils import DictManager
 
 __all__ = [
   'State', 'ShortTermState', 'LongTermState', 'ParamState',
-  'StateStack', 'visible_state_dict',
+  'StateManager', 'visible_state_dict',
 ]
 
 PyTree = Any
@@ -19,9 +19,7 @@ def _register_pytree_cls(cls):
     _pytree_registered_objects.add(cls)
 
 
-
 state_stack_list = []
-
 
 
 class State(object):
@@ -116,11 +114,11 @@ class ParamState(LongTermState):
 
 
 @jax.tree_util.register_pytree_node_class
-class StateStack(Stack):
+class StateManager(DictManager):
   """
   State stack, for collecting all :py:class:`~.State` used in the program.
 
-  :py:class:`~.StateStack` supports all features of python dict.
+  :py:class:`~.StateManager` supports all features of python dict.
   """
 
   __module__ = 'braincore'
@@ -138,7 +136,7 @@ class StateStack(Stack):
     """
     Split the values into several subsets of stack by the given types.
     """
-    results = tuple(Stack() for _ in range(len(filters) + 1))
+    results = tuple(DictManager() for _ in range(len(filters) + 1))
     for k, v in self.items():
       for i, filt in enumerate(filters):
         if isinstance(v, filt):
@@ -152,12 +150,12 @@ class StateStack(Stack):
     """
     Collect the values by the given types.
     """
-    results = Stack()
+    results = DictManager()
     for k, v in self.items():
       results[k] = v.value
     return results
 
-  def split(self, first: type, *others: type) -> Tuple['StateStack', ...]:
+  def split(self, first: type, *others: type) -> Tuple['StateManager', ...]:
     return super().split(first, *others)
 
   def _check_elem(self, elem):
@@ -167,23 +165,23 @@ class StateStack(Stack):
     self[key].value = value
 
 
-class visible_state_dict(StateStack):
+class visible_state_dict(StateManager):
   """
   The state dictionary whose elements are visible to ``.states()`` collection functions.
   """
   pass
 
 
-class state_auto_stack(object):
+class state_tracing(object):
   """
   The auto stack, which is used to store the states automatically.
   """
 
   def __init__(self):
-    self.reads = StateStack()
-    self.writes = StateStack()
+    self.reads = set()
+    self.writes = set()
 
-  def __enter__(self) -> 'state_auto_stack':
+  def __enter__(self) -> 'state_tracing':
     state_stack_list.append(self)
     return self
 
@@ -199,7 +197,7 @@ class state_auto_stack(object):
 
 def sate_compose(first: dict, *others: dict):
   """
-  Compose multiple dictionaries as a ``Stack``.
+  Compose multiple dictionaries as a ``DictManager``.
 
   Args:
     first: The dict.
@@ -208,7 +206,7 @@ def sate_compose(first: dict, *others: dict):
   Returns:
     stack: The composed stack.
   """
-  stack = StateStack(first)
+  stack = StateManager(first)
   for oth in others:
     stack.update(oth)
   return stack
