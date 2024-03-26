@@ -1,6 +1,6 @@
 import inspect
 from functools import partial, wraps
-from typing import Union, Callable, Dict, Sequence, Optional, Any
+from typing import Union, Callable, Dict, Sequence, Optional, Any, Tuple
 
 import jax
 from jax import numpy as jnp
@@ -162,7 +162,7 @@ class GradientTransform(object):
     self.target = target
 
     # transform
-    self._states_to_be_written: tuple = None
+    self._states_to_be_written: Tuple[State, ...] = None
     _grad_setting = dict() if transform_params is None else transform_params
     if self._has_aux:
       self._transform = transform(self._fun_with_aux, argnums=self._argnums, has_aux=True, **_grad_setting)
@@ -180,7 +180,9 @@ class GradientTransform(object):
     if self._states_to_be_written is None:
       with StateTrace() as stack:
         output = self.target(*args, **kwargs)
-        self._states_to_be_written = tuple(stack.writes)
+        grad_ids = set([id(v) for v in self._grad_vars])
+        self._states_to_be_written = tuple(st for st, ty in zip(stack.states, stack.types)
+                                           if ty == 'write' and id(st) not in grad_ids)
     else:
       output = self.target(*args, **kwargs)
     return output
@@ -349,7 +351,6 @@ def vector_grad(
     Whether return the loss value.
   argnums: Optional, integer or sequence of integers. Specifies which
     positional argument(s) to differentiate with respect to (default ``0``).
-
 
   Returns
   -------
