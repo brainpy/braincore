@@ -6,18 +6,18 @@ StateManager instance can be used to manage the states in the JAX program. The m
 return the shape, dtype, and named shape of the output of the function.
 
 """
-
+import functools
 import operator
 from collections.abc import Hashable, Iterable, Sequence
 from contextlib import ExitStack
 from typing import Any, Callable, Tuple, Union
 
 import jax
-from jax._src import source_info_util
 from jax._src.core import DBIdx
 from jax._src.linear_util import annotate
 from jax._src.traceback_util import api_boundary
 from jax.api_util import flatten_fun, argnums_partial, shaped_abstractify
+from jax.extend import source_info_util
 from jax.extend.linear_util import wrap_init, WrappedFun
 from jax.interpreters import partial_eval as pe
 from jax.util import unzip2, wraps
@@ -86,12 +86,9 @@ class WrappedFunToTraceState(object):
 
   def to_state_manager(self) -> StateManager:
     manager = StateManager()
-    if 'read' in self.return_categories:
-      for state in self.state_trace.reads:
-        manager[id(state)] = state
-    if 'write' in self.return_categories:
-      for state in self.state_trace.writes:
-        manager[id(state)] = state
+    for st, ty in zip(self.state_trace.states, self.state_trace.types):
+      if ty in self.return_categories:
+        manager[id(st)] = st
     return manager
 
   def __repr__(self):
@@ -237,6 +234,15 @@ def trace_to_jaxpr_dynamic2(
   return jaxpr, out_type, consts
 
 
+# modified from jax.interpreters.partial_eval.DynamicJaxprTrace.new_arg()
+def _new_arg(frame, trace, aval):
+  tracer = pe.DynamicJaxprTracer(trace, aval, source_info_util.current())
+  frame.tracers.append(tracer)
+  frame.tracer_to_var[id(tracer)] = var = frame.newvar(aval)
+  frame.invars.append(var)
+  return tracer
+
+
 def trace_to_subjaxpr_dynamic2(
     fun: WrappedFun,
     main: jax.core.MainTrace,
@@ -249,9 +255,12 @@ def trace_to_subjaxpr_dynamic2(
     trace = pe.DynamicJaxprTrace(main, jax.core.cur_sublevel())
     in_tracers = _input_type_to_tracers(trace.new_arg, in_avals)
     in_tracers = [t for t, keep in zip(in_tracers, keep_inputs) if keep]
-    fun.f.init_trace_newarg(trace.new_arg)
-    with fun.f.state_trace:  # collect reads and writes
+    # append the new arg function to the trace at this frame
+    fun.f.init_trace_newarg(functools.partial(_new_arg, frame, trace))
+    # collect state reads and writes
+    with fun.f.state_trace:
       ans = fun.call_wrapped(*in_tracers)
+    # full_raise the ans to get the jaxpr
     out_tracers = map(trace.full_raise, ans)
     jaxpr, out_type, consts = frame.to_jaxpr2(out_tracers)
     del fun, main, trace, frame, out_tracers, ans

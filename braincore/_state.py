@@ -45,13 +45,14 @@ class State(object):
     value: PyTree. It can be anything as a pyTree.
   """
   __module__ = 'braincore'
-  __slots__ = ('_value', '_tree')
+  __slots__ = ('_value', '_tree', '_level')
 
   def __init__(self, value: PyTree):
     if isinstance(value, State):
       value = value.value
     self._value = value
     self._tree = jax.tree.structure(value)
+    self._level = len(state_stack_list)
     _register_pytree_cls(self.__class__)
 
   @property
@@ -59,19 +60,23 @@ class State(object):
     """
     The data and its value.
     """
+    # read the value by the stack (>= level)
     trace: StateTrace
-    for trace in state_stack_list:
+    for trace in state_stack_list[self._level:]:
       trace.read_its_value(self)
+    # return the value
     return self._value
 
   @value.setter
   def value(self, v):
+    # value checking
     v = v.value if isinstance(v, State) else v
     self.__check_value(v)
-
+    # write the value by the stack (>= level)
     trace: StateTrace
-    for trace in state_stack_list:
+    for trace in state_stack_list[self._level:]:
       trace.write_its_value(self)
+    # set the value
     self._value = v
 
   def __check_value(self, v):
@@ -196,13 +201,13 @@ class StateTrace(object):
   """
 
   def __init__(self, new_arg: Callable = None):
-    self.reads = []
-    self.writes = []
+    self.states: List[State] = []
+    self.types: List[str] = []
+    self._id2index = dict()
+    self._org_values = []
     self._jax_trace_new_arg = new_arg
-    self._org_values_of_reads = []
-    self._org_values_of_writes = []
 
-  def new_arg(self, state: State):
+  def new_arg(self, state: State) -> None:
     if self._jax_trace_new_arg is not None:
       # internal use
       state._value = jax.tree.map(lambda x: self._jax_trace_new_arg(shaped_abstractify(x)), state._value)
@@ -215,42 +220,31 @@ class StateTrace(object):
     state_stack_list.pop()
 
   def read_its_value(self, state: State) -> None:
-    if state not in self.reads:
-      self.reads.append(state)
-      self._org_values_of_reads.append(state._value)  # internal use
+    id_ = id(state)
+    if id_ not in self._id2index:
+      self._id2index[id_] = len(self.states)
+      self.states.append(state)
+      self.types.append('read')
+      self._org_values.append(state._value)  # internal use
       self.new_arg(state)
 
   def write_its_value(self, state: State) -> None:
-    if state not in self.writes:
-      self.writes.append(state)
-      self._org_values_of_writes.append(state._value)  # internal use
-      if state not in self.reads:
-        self.new_arg(state)
+    id_ = id(state)
+    if id_ not in self._id2index:
+      self.read_its_value(state)
+    index = self._id2index[id_]
+    self.types[index] = 'write'
 
   def collect_values(self, *categories: str) -> Tuple:
     results = []
-    ids = set()
-    if 'read' in categories:
-      for st in self.reads:
+    for st, ty in zip(self.states, self.types):
+      if ty in categories:
         results.append(st.value)
-        ids.add(id(st))
-    if 'write' in categories:
-      for st in self.writes:
-        if id(st) not in ids:
-          results.append(st.value)
-          ids.add(id(st))
     return tuple(results)
 
-  def recovery_original_values(self):
-    ids = set()
-    for st, v in zip(self.reads, self._org_values_of_reads):
-      if id(st) not in ids:
-        st._value = v
-        ids.add(id(st))
-    for st, v in zip(self.writes, self._org_values_of_writes):
-      if id(st) not in ids:
-        st._value = v
-        ids.add(id(st))
+  def recovery_original_values(self) -> None:
+    for st, val in zip(self.states, self._org_values):
+      st._value = val
 
 
 def sate_compose(first: dict, *others: dict):
