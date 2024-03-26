@@ -1,14 +1,14 @@
 """
-Unit-aware replacements for numpy functions.
+Unit-aware replacements for jax numpy functions.
 """
 
 from functools import wraps
 
-import numpy as np
+import jax.numpy as jnp
 
 from .base import (
   DIMENSIONLESS,
-  Quantity,
+  Array,
   check_units,
   fail_for_dimension_mismatch,
   is_dimensionless,
@@ -52,7 +52,7 @@ __all__ = [
 def where(condition, *args, **kwds):  # pylint: disable=C0111
   if len(args) == 0:
     # nothing to do
-    return np.where(condition, *args, **kwds)
+    return jnp.where(condition, *args, **kwds)
   elif len(args) == 2:
     # check that x and y have the same dimensions
     fail_for_dimension_mismatch(
@@ -60,83 +60,83 @@ def where(condition, *args, **kwds):  # pylint: disable=C0111
     )
 
     if is_dimensionless(args[0]):
-      return np.where(condition, *args, **kwds)
+      return jnp.where(condition, *args, **kwds)
     else:
       # as both arguments have the same unit, just use the first one's
-      dimensionless_args = [np.asarray(arg) for arg in args]
-      return Quantity.with_dimensions(
-        np.where(condition, *dimensionless_args), args[0].dimensions
+      dimensionless_args = [jnp.asarray(arg) for arg in args]
+      return Array.with_dimensions(
+        jnp.where(condition, *dimensionless_args), args[0].dimensions
       )
   else:
     # illegal number of arguments, let numpy take care of this
-    return np.where(condition, *args, **kwds)
+    return jnp.where(condition, *args, **kwds)
 
 
-where.__doc__ = np.where.__doc__
+where.__doc__ = jnp.where.__doc__
 where._do_not_run_doctests = True
 
-# Functions that work on dimensionless quantities only
-sin = wrap_function_dimensionless(np.sin)
-sinh = wrap_function_dimensionless(np.sinh)
-arcsin = wrap_function_dimensionless(np.arcsin)
-arcsinh = wrap_function_dimensionless(np.arcsinh)
-cos = wrap_function_dimensionless(np.cos)
-cosh = wrap_function_dimensionless(np.cosh)
-arccos = wrap_function_dimensionless(np.arccos)
-arccosh = wrap_function_dimensionless(np.arccosh)
-tan = wrap_function_dimensionless(np.tan)
-tanh = wrap_function_dimensionless(np.tanh)
-arctan = wrap_function_dimensionless(np.arctan)
-arctanh = wrap_function_dimensionless(np.arctanh)
+# Functions that work on dimensionless Arrays only
+sin = wrap_function_dimensionless(jnp.sin)
+sinh = wrap_function_dimensionless(jnp.sinh)
+arcsin = wrap_function_dimensionless(jnp.arcsin)
+arcsinh = wrap_function_dimensionless(jnp.arcsinh)
+cos = wrap_function_dimensionless(jnp.cos)
+cosh = wrap_function_dimensionless(jnp.cosh)
+arccos = wrap_function_dimensionless(jnp.arccos)
+arccosh = wrap_function_dimensionless(jnp.arccosh)
+tan = wrap_function_dimensionless(jnp.tan)
+tanh = wrap_function_dimensionless(jnp.tanh)
+arctan = wrap_function_dimensionless(jnp.arctan)
+arctanh = wrap_function_dimensionless(jnp.arctanh)
 
-log = wrap_function_dimensionless(np.log)
-log10 = wrap_function_dimensionless(np.log10)
-exp = wrap_function_dimensionless(np.exp)
-expm1 = wrap_function_dimensionless(np.expm1)
-log1p = wrap_function_dimensionless(np.log1p)
+log = wrap_function_dimensionless(jnp.log)
+log10 = wrap_function_dimensionless(jnp.log10)
+exp = wrap_function_dimensionless(jnp.exp)
+expm1 = wrap_function_dimensionless(jnp.expm1)
+log1p = wrap_function_dimensionless(jnp.log1p)
 
-ptp = wrap_function_keep_dimensions(np.ptp)
+ptp = wrap_function_keep_dimensions(jnp.ptp)
 
 
 @check_units(x=1, result=1)
 def exprel(x):
-  x = np.asarray(x)
-  if issubclass(x.dtype.type, np.integer):
-    result = np.empty_like(x, dtype=np.float64)
+  x = jnp.asarray(x)
+  if issubclass(x.dtype.type, jnp.integer):
+    result = jnp.empty_like(x, dtype=jnp.float64)
   else:
-    result = np.empty_like(x)
+    result = jnp.empty_like(x)
   # Following the implementation of exprel from scipy.special
   if x.shape == ():
-    if np.abs(x) < 1e-16:
+    if jnp.abs(x) < 1e-16:
       return 1.0
     elif x > 717:
-      return np.inf
+      return jnp.inf
     else:
-      return np.expm1(x) / x
+      return jnp.expm1(x) / x
   else:
-    small = np.abs(x) < 1e-16
+    small = jnp.abs(x) < 1e-16
     big = x > 717
-    in_between = np.logical_not(small | big)
+    in_between = jnp.logical_not(small | big)
     result[small] = 1.0
-    result[big] = np.inf
-    result[in_between] = np.expm1(x[in_between]) / x[in_between]
+    result[big] = jnp.inf
+    result[in_between] = jnp.expm1(x[in_between]) / x[in_between]
     return result
 
 
-ones_like = wrap_function_remove_dimensions(np.ones_like)
-zeros_like = wrap_function_remove_dimensions(np.zeros_like)
+ones_like = wrap_function_remove_dimensions(jnp.ones_like)
+zeros_like = wrap_function_remove_dimensions(jnp.zeros_like)
 
 
 def wrap_function_to_method(func):
   """
   Wraps a function so that it calls the corresponding method on the
-  Quantities object (if called with a Quantities object as the first
+  Arrays object (if called with a Arrays object as the first
   argument). All other arguments are left untouched.
   """
 
   @wraps(func)
   def f(x, *args, **kwds):  # pylint: disable=C0111
-    if isinstance(x, Quantity):
+    if isinstance(x, Array):
       return getattr(x, func.__name__)(*args, **kwds)
     else:
       # no need to wrap anything
@@ -148,7 +148,7 @@ def wrap_function_to_method(func):
   return f
 
 
-@wraps(np.arange)
+@wraps(jnp.arange)
 def arange(*args, **kwargs):
   # arange has a bit of a complicated argument structure unfortunately
   # we leave the actual checking of the number of arguments to numpy, though
@@ -202,21 +202,21 @@ def arange(*args, **kwargs):
   # https://numpy.org/devdocs/release/2.0.0-notes.html#arange-s-start-argument-is-positional-only
   # TODO: check whether this is still the case in the final release
   if start == 0:
-    return Quantity(
-      np.arange(
-        stop=np.asarray(stop),
-        step=np.asarray(step),
+    return Array(
+      jnp.arange(
+        stop=jnp.asarray(stop),
+        step=jnp.asarray(step),
         **kwargs,
       ),
       dim=dim,
       copy=False,
     )
   else:
-    return Quantity(
-      np.arange(
-        np.asarray(start),
-        stop=np.asarray(stop),
-        step=np.asarray(step),
+    return Array(
+      jnp.arange(
+        jnp.asarray(start),
+        stop=jnp.asarray(stop),
+        step=jnp.asarray(step),
         **kwargs,
       ),
       dim=dim,
@@ -227,7 +227,7 @@ def arange(*args, **kwargs):
 arange._do_not_run_doctests = True
 
 
-@wraps(np.linspace)
+@wraps(jnp.linspace)
 def linspace(start, stop, num=50, endpoint=True, retstep=False, dtype=None):
   fail_for_dimension_mismatch(
     start,
@@ -239,46 +239,46 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, dtype=None):
     stop=stop,
   )
   dim = getattr(start, "dim", DIMENSIONLESS)
-  result = np.linspace(
-    np.asarray(start),
-    np.asarray(stop),
+  result = jnp.linspace(
+    jnp.asarray(start),
+    jnp.asarray(stop),
     num=num,
     endpoint=endpoint,
     retstep=retstep,
     dtype=dtype,
   )
-  return Quantity(result, dim=dim, copy=False)
+  return Array(result, dim=dim, copy=False)
 
 
 linspace._do_not_run_doctests = True
 
 # these functions discard subclass info -- maybe a bug in numpy?
-ravel = wrap_function_to_method(np.ravel)
-diagonal = wrap_function_to_method(np.diagonal)
-trace = wrap_function_to_method(np.trace)
-dot = wrap_function_to_method(np.dot)
+ravel = wrap_function_to_method(jnp.ravel)
+diagonal = wrap_function_to_method(jnp.diagonal)
+trace = wrap_function_to_method(jnp.trace)
+dot = wrap_function_to_method(jnp.dot)
 
 # This is a very minor detail: setting the __module__ attribute allows the
 # automatic reference doc generation mechanism to attribute the functions to
 # this module. Maybe also helpful for IDEs and other code introspection tools.
-sin.__module__ = 'brainpy.math.units'
-sinh.__module__ = 'brainpy.math.units'
-arcsin.__module__ = 'brainpy.math.units'
-arcsinh.__module__ = 'brainpy.math.units'
-cos.__module__ = 'brainpy.math.units'
-cosh.__module__ = 'brainpy.math.units'
-arccos.__module__ = 'brainpy.math.units'
-arccosh.__module__ = 'brainpy.math.units'
-tan.__module__ = 'brainpy.math.units'
-tanh.__module__ = 'brainpy.math.units'
-arctan.__module__ = 'brainpy.math.units'
-arctanh.__module__ = 'brainpy.math.units'
+sin.__module__ = 'braincore.units'
+sinh.__module__ = 'braincore.units'
+arcsin.__module__ = 'braincore.units'
+arcsinh.__module__ = 'braincore.units'
+cos.__module__ = 'braincore.units'
+cosh.__module__ = 'braincore.units'
+arccos.__module__ = 'braincore.units'
+arccosh.__module__ = 'braincore.units'
+tan.__module__ = 'braincore.units'
+tanh.__module__ = 'braincore.units'
+arctan.__module__ = 'braincore.units'
+arctanh.__module__ = 'braincore.units'
 
-log.__module__ = 'brainpy.math.units'
-exp.__module__ = 'brainpy.math.units'
-ravel.__module__ = 'brainpy.math.units'
-diagonal.__module__ = 'brainpy.math.units'
-trace.__module__ = 'brainpy.math.units'
-dot.__module__ = 'brainpy.math.units'
-arange.__module__ = 'brainpy.math.units'
-linspace.__module__ = 'brainpy.math.units'
+log.__module__ = 'braincore.units'
+exp.__module__ = 'braincore.units'
+ravel.__module__ = 'braincore.units'
+diagonal.__module__ = 'braincore.units'
+trace.__module__ = 'braincore.units'
+dot.__module__ = 'braincore.units'
+arange.__module__ = 'braincore.units'
+linspace.__module__ = 'braincore.units'
