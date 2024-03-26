@@ -1,6 +1,7 @@
-from typing import Any, Tuple, Dict
+from typing import Any, Tuple, Dict, List, Callable
 
 import jax
+from jax.api_util import shaped_abstractify
 
 from ._utils import DictManager
 
@@ -19,7 +20,7 @@ def _register_pytree_cls(cls):
     _pytree_registered_objects.add(cls)
 
 
-state_stack_list = []
+state_stack_list: List['StateTrace'] = []
 
 
 class State(object):
@@ -44,16 +45,19 @@ class State(object):
     """
     The data and its value.
     """
-    for stack in state_stack_list:
-      stack.add_read(self)
+    trace: StateTrace
+    for trace in state_stack_list:
+      trace.read_its_value(self)
     return self._value
 
   @value.setter
   def value(self, v):
     v = v.value if isinstance(v, State) else v
     self.__check_value(v)
-    for stack in state_stack_list:
-      stack.add_write(self)
+
+    trace: StateTrace
+    for trace in state_stack_list:
+      trace.write_its_value(self)
     self._value = v
 
   def __check_value(self, v):
@@ -172,27 +176,67 @@ class visible_state_dict(StateManager):
   pass
 
 
-class state_tracing(object):
+class StateTrace(object):
   """
   The auto stack, which is used to store the states automatically.
   """
 
-  def __init__(self):
-    self.reads = set()
-    self.writes = set()
+  def __init__(self, new_arg: Callable = None):
+    self.reads = []
+    self.writes = []
+    self._jax_trace_new_arg = new_arg
+    self._org_values_of_reads = []
+    self._org_values_of_writes = []
 
-  def __enter__(self) -> 'state_tracing':
+  def new_arg(self, state: State):
+    if self._jax_trace_new_arg is not None:
+      # internal use
+      state._value = jax.tree.map(lambda x: self._jax_trace_new_arg(shaped_abstractify(x)), state._value)
+
+  def __enter__(self) -> 'StateTrace':
     state_stack_list.append(self)
     return self
 
   def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
     state_stack_list.pop()
 
-  def add_read(self, state: State) -> None:
-    self.reads.add(state)
+  def read_its_value(self, state: State) -> None:
+    if state not in self.reads:
+      self.reads.append(state)
+      self._org_values_of_reads.append(state._value)  # internal use
+      self.new_arg(state)
 
-  def add_write(self, state: State) -> None:
-    self.writes.add(state)
+  def write_its_value(self, state: State) -> None:
+    if state not in self.writes:
+      self.writes.append(state)
+      self._org_values_of_writes.append(state._value)  # internal use
+      if state not in self.reads:
+        self.new_arg(state)
+
+  def collect_values(self, *categories: str) -> Tuple:
+    results = []
+    ids = set()
+    if 'read' in categories:
+      for st in self.reads:
+        results.append(st.value)
+        ids.add(id(st))
+    if 'write' in categories:
+      for st in self.writes:
+        if id(st) not in ids:
+          results.append(st.value)
+          ids.add(id(st))
+    return tuple(results)
+
+  def recovery_original_values(self):
+    ids = set()
+    for st, v in zip(self.reads, self._org_values_of_reads):
+      if id(st) not in ids:
+        st._value = v
+        ids.add(id(st))
+    for st, v in zip(self.writes, self._org_values_of_writes):
+      if id(st) not in ids:
+        st._value = v
+        ids.add(id(st))
 
 
 def sate_compose(first: dict, *others: dict):

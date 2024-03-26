@@ -9,7 +9,7 @@ from jax.api_util import argnums_partial
 from jax.extend import linear_util
 
 from braincore._common import set_module_as
-from braincore._state import State, state_tracing
+from braincore._state import State, StateTrace
 
 __all__ = [
   'vector_grad',
@@ -178,7 +178,7 @@ class GradientTransform(object):
 
   def __call_target(self, *args, **kwargs):
     if self._states_to_be_written is None:
-      with state_tracing() as stack:
+      with StateTrace() as stack:
         output = self.target(*args, **kwargs)
         self._states_to_be_written = tuple(stack.writes)
     else:
