@@ -806,6 +806,104 @@ def is_scalar_type(obj):
     return jnp.isscalar(obj) and not isinstance(obj, str)
 
 
+#: ufuncs that work on all dimensions and preserve the dimensions, e.g. abs
+UFUNCS_PRESERVE_DIMENSIONS = [
+  "absolute",
+  "rint",
+  "negative",
+  "positive",
+  "conj",
+  "conjugate",
+  "floor",
+  "ceil",
+  "trunc",
+]
+
+#: ufuncs that work on all dimensions but change the dimensions, e.g. square
+UFUNCS_CHANGE_DIMENSIONS = [
+  "multiply",
+  "divide",
+  "true_divide",
+  "floor_divide",
+  "sqrt",
+  "square",
+  "reciprocal",
+  "dot",
+  "matmul",
+]
+
+#: ufuncs that work with matching dimensions, e.g. add
+UFUNCS_MATCHING_DIMENSIONS = [
+  "add",
+  "subtract",
+  "maximum",
+  "minimum",
+  "remainder",
+  "mod",
+  "fmod",
+]
+
+#: ufuncs that compare values, i.e. work only with matching dimensions but do
+#: not result in a value with dimensions, e.g. equals
+UFUNCS_COMPARISONS = [
+  "less",
+  "less_equal",
+  "greater",
+  "greater_equal",
+  "equal",
+  "not_equal",
+]
+
+#: Logical operations that work on all quantities and return boolean arrays
+UFUNCS_LOGICAL = [
+  "logical_and",
+  "logical_or",
+  "logical_xor",
+  "logical_not",
+  "isreal",
+  "iscomplex",
+  "isfinite",
+  "isinf",
+  "isnan",
+]
+
+#: ufuncs that only work on dimensionless quantities
+UFUNCS_DIMENSIONLESS = [
+  "sin",
+  "sinh",
+  "arcsin",
+  "arcsinh",
+  "cos",
+  "cosh",
+  "arccos",
+  "arccosh",
+  "tan",
+  "tanh",
+  "arctan",
+  "arctanh",
+  "log",
+  "log2",
+  "log10",
+  "log1p",
+  "exp",
+  "exp2",
+  "expm1",
+]
+
+#: ufuncs that only work on two dimensionless quantities
+UFUNCS_DIMENSIONLESS_TWOARGS = ["logaddexp", "logaddexp2", "arctan2", "hypot"]
+
+#: ufuncs that only work on integers and therefore never on quantities
+UFUNCS_INTEGERS = [
+  "bitwise_and",
+  "bitwise_or",
+  "bitwise_xor",
+  "invert",
+  "left_shift",
+  "right_shift",
+]
+
+
 def wrap_function_dimensionless(func):
   """
   Returns a new function that wraps the given function `func` so that it
@@ -970,11 +1068,23 @@ class Array(object):
   def __init__(self, value, dtype: Any = None, unit=DIMENSIONLESS, copy=False):
     # array value
     if isinstance(value, Array):
+      unit = value.unit
       value = value._value
     elif isinstance(value, (tuple, list, np.ndarray)):
+      # get the unit if it is an unit list
+      if len(value) > 0 and hasattr(value[0], 'unit'):
+        # make sure all elements have the same unit
+        units = [v.unit for v in value if hasattr(v, 'unit')]
+        if not all(u == units[0] for u in units):
+          raise ValueError("All elements must have the same unit")
+        unit = units[0]
+        # get the value
+        value = [v.value if hasattr(v, 'value') else v for v in value]
+      # transform to jnp array
       value = jnp.asarray(value, dtype=dtype, copy=copy)
     if dtype is not None:
       value = jnp.asarray(value, dtype=dtype, copy=copy)
+
     self._value = value
 
     # unit
@@ -1401,7 +1511,7 @@ class Array(object):
       self_value.unit = unit_operation(self.unit, other_unit)
       return self_value
     else:
-      newdims = unit_operation(self.dim, other_unit)
+      newdims = unit_operation(self.unit, other_unit)
       self_arr = np.array(self, copy=False)
       other_arr = np.array(other, copy=False)
       result = operation(self_arr, other_arr)
@@ -2392,16 +2502,16 @@ class Array(object):
     return bm.Variable(self)
 
   def __bool__(self) -> bool:
-    return Array(self.value.__bool__(), unit=self.unit)
+    return self.value.__bool__()
 
   def __float__(self):
-    return Array(self.value.__float__(), unit=self.unit)
+    return self.value.__float__()
 
   def __int__(self):
-    return Array(self.value.__int__(), unit=self.unit)
+    return self.value.__int__()
 
   def __complex__(self):
-    return Array(self.value.__complex__(), unit=self.unit)
+    return self.value.__complex__()
 
   def __hex__(self):
     assert self.ndim == 0, 'hex only works on scalar values'
@@ -2954,8 +3064,10 @@ class Array(object):
   def double(self):
     return Array(jnp.asarray(self.value, dtype=jnp.float64), unit=self.unit)
 
+
 JaxArray = Array
 ndarray = Array
+
 
 class Unit(Array):
   r"""
@@ -3050,29 +3162,11 @@ class Unit(Array):
    3. * joule
 
   """
-  __slots__ = ["unit", "scale", "_dispname", "_name", "iscompound"]
+  __slots__ = ["_value", "_unit", "scale", "_dispname", "_name", "iscompound"]
 
   __array_priority__ = 100
 
   automatically_register_units = True
-
-  def __new__(
-      cls,
-      arr,
-      unit=None,
-      scale=0,
-      name="",
-      dispname="",
-      iscompound="",
-      dtype=None,
-      copy=False,
-  ):
-    if unit is None:
-      unit = DIMENSIONLESS
-    obj = super().__new__(
-      cls, arr, unit=unit, dtype=dtype, copy=copy, force_array=True
-    )
-    return obj
 
   def __init__(
       self,
@@ -3091,7 +3185,8 @@ class Unit(Array):
       raise AssertionError(
         f"Unit value has to be 10**scale (scale={scale}, value={value})"
       )
-    self.unit = unit
+    self._unit = unit
+    self._value = value
 
     # The scale for this unit (as the integer exponent of 10), i.e.
     # a scale of 3 means 10^3, for a "k" prefix.
@@ -3358,7 +3453,7 @@ class UnitRegistry:
   def add(self, u):
     """Add a unit to the registry"""
     self.units[repr(u)] = u
-    self.units_for_dimensions[u.dim][float(u)] = u
+    self.units_for_dimensions[u.unit][float(u)] = u
 
   def __getitem__(self, x):
     """Returns the best unit for array x

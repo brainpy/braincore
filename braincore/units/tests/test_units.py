@@ -3,18 +3,19 @@ import pickle
 import warnings
 
 import numpy as np
+import jax.numpy as jnp
 import pytest
 from numpy.testing import assert_equal
 
-from brainpy._src.math.units.all_units import *
-from brainpy._src.math.units.base import (
+from braincore.units.all_units import *
+from braincore.units.base import (
   DIMENSIONLESS,
   UFUNCS_DIMENSIONLESS,
   UFUNCS_DIMENSIONLESS_TWOARGS,
   UFUNCS_INTEGERS,
   UFUNCS_LOGICAL,
   DimensionMismatchError,
-  Quantity,
+  Array,
   Unit,
   check_units,
   fail_for_dimension_mismatch,
@@ -26,7 +27,7 @@ from brainpy._src.math.units.base import (
   is_dimensionless,
   is_scalar_type,
 )
-from brainpy._src.math.units.std_units import Hz, cm, kHz, mM, ms, mV, nA, nS
+from braincore.units.std_units import Hz, cm, kHz, mM, ms, mV, nA, nS
 
 
 def assert_allclose(actual, desired, rtol=4.5e8, atol=0, **kwds):
@@ -47,19 +48,19 @@ def assert_allclose(actual, desired, rtol=4.5e8, atol=0, **kwds):
       The absolute tolerance
   """
   assert have_same_dimensions(actual, desired)
-  eps = np.finfo(np.float32).eps
+  eps = jnp.finfo(np.float32).eps
   rtol = eps * rtol
-  np.allclose(
-    np.asarray(actual), np.asarray(desired), rtol=rtol, atol=atol, **kwds
+  jnp.allclose(
+    jnp.asarray(actual), jnp.asarray(desired), rtol=rtol, atol=atol, **kwds
   )
 
 
 def assert_quantity(q, values, unit):
-  assert isinstance(q, Quantity) or (
+  assert isinstance(q, Array) or (
       have_same_dimensions(unit, 1)
-      and (values.shape == () or isinstance(q, np.ndarray))
+      and (values.shape == () or isinstance(q, jnp.ndarray))
   ), q
-  assert_allclose(np.asarray(q), values)
+  assert_allclose(jnp.asarray(q), values)
   assert have_same_dimensions(
     q, unit
   ), f"Dimension mismatch: ({get_dimensions(q)}) ({get_dimensions(unit)})"
@@ -67,7 +68,7 @@ def assert_quantity(q, values, unit):
 
 @pytest.mark.codegen_independent
 def test_construction():
-  """Test the construction of quantity objects"""
+  """Test the construction of Array objects"""
   q = 500 * ms
   assert_quantity(q, 0.5, second)
   q = np.float64(500) * ms
@@ -76,55 +77,55 @@ def test_construction():
   assert_quantity(q, 0.5, second)
   q = np.array([500, 1000]) * ms
   assert_quantity(q, np.array([0.5, 1]), second)
-  q = Quantity(500)
+  q = Array(500)
   assert_quantity(q, 500, 1)
-  q = Quantity(500, dim=second.dim)
+  q = Array(500, unit=second.unit)
   assert_quantity(q, 500, second)
-  q = Quantity([0.5, 1], dim=second.dim)
+  q = Array([0.5, 1], unit=second.unit)
   assert_quantity(q, np.array([0.5, 1]), second)
-  q = Quantity(np.array([0.5, 1]), dim=second.dim)
+  q = Array(np.array([0.5, 1]), unit=second.unit)
   assert_quantity(q, np.array([0.5, 1]), second)
-  q = Quantity([500 * ms, 1 * second])
+  q = Array([500 * ms, 1 * second])
   assert_quantity(q, np.array([0.5, 1]), second)
-  q = Quantity.with_dimensions(np.array([0.5, 1]), second=1)
+  q = Array.with_dimensions(np.array([0.5, 1]), second=1)
   assert_quantity(q, np.array([0.5, 1]), second)
   q = [0.5, 1] * second
   assert_quantity(q, np.array([0.5, 1]), second)
 
   # dimensionless quantities
-  q = Quantity([1, 2, 3])
+  q = Array([1, 2, 3])
   assert_quantity(q, np.array([1, 2, 3]), Unit(1))
-  q = Quantity(np.array([1, 2, 3]))
+  q = Array(np.array([1, 2, 3]))
   assert_quantity(q, np.array([1, 2, 3]), Unit(1))
-  q = Quantity([])
+  q = Array([])
   assert_quantity(q, np.array([]), Unit(1))
 
-  # copying/referencing a quantity
-  q1 = Quantity.with_dimensions(np.array([0.5, 1]), second=1)
-  q2 = Quantity(q1)  # no copy
+  # copying/referencing a Array
+  q1 = Array.with_dimensions(np.array([0.5, 1]), second=1)
+  q2 = Array(q1)  # no copy
   assert_quantity(q2, np.asarray(q1), q1)
   q2[0] = 3 * second
   assert_equal(q1[0], 3 * second)
 
-  q1 = Quantity.with_dimensions(np.array([0.5, 1]), second=1)
-  q2 = Quantity(q1, copy=True)  # copy
+  q1 = Array.with_dimensions(np.array([0.5, 1]), second=1)
+  q2 = Array(q1, copy=True)  # copy
   assert_quantity(q2, np.asarray(q1), q1)
   q2[0] = 3 * second
   assert_equal(q1[0], 0.5 * second)
 
   # Illegal constructor calls
   with pytest.raises(TypeError):
-    Quantity([500 * ms, 1])
+    Array([500 * ms, 1])
   with pytest.raises(TypeError):
-    Quantity(["some", "nonsense"])
+    Array(["some", "nonsense"])
   with pytest.raises(DimensionMismatchError):
-    Quantity([500 * ms, 1 * volt])
+    Array([500 * ms, 1 * volt])
 
 
 @pytest.mark.codegen_independent
 def test_get_dimensions():
   """
-  Test various ways of getting/comparing the dimensions of a quantity.
+  Test various ways of getting/comparing the dimensions of a Array.
   """
   q = 500 * ms
   assert get_dimensions(q) is get_or_create_dimension(q.dimensions._dims)
@@ -159,7 +160,7 @@ def test_get_dimensions():
 @pytest.mark.codegen_independent
 def test_display():
   """
-  Test displaying a quantity in different units
+  Test displaying a Array in different units
   """
   assert_equal(in_unit(3 * volt, mvolt), "3000. mV")
   assert_equal(in_unit(10 * mV, ohm * amp), "0.01 ohm A")
@@ -192,13 +193,13 @@ def test_pickling():
 def test_dimension_singletons():
   # Make sure that Dimension objects are singletons, even when pickled
   volt_dim = get_or_create_dimension((2, 1, -3, -1, 0, 0, 0))
-  assert volt.dim is volt_dim
+  assert volt.unit is volt_dim
   import pickle
 
   pickled_dim = pickle.dumps(volt_dim)
   unpickled_dim = pickle.loads(pickled_dim)
   assert unpickled_dim is volt_dim
-  assert unpickled_dim is volt.dim
+  assert unpickled_dim is volt.unit
 
 
 @pytest.mark.codegen_independent
@@ -286,7 +287,7 @@ def test_str_repr():
     # Made-up unit:
     Unit(
       1,
-      dim=get_or_create_dimension(length=5, time=2),
+      unit=get_or_create_dimension(length=5, time=2),
       dispname="O",
     ),
     8000 * umetre ** 3,
@@ -331,7 +332,7 @@ def test_str_repr():
   for error in [
     DimensionMismatchError("A description"),
     DimensionMismatchError("A description", DIMENSIONLESS),
-    DimensionMismatchError("A description", DIMENSIONLESS, second.dim),
+    DimensionMismatchError("A description", DIMENSIONLESS, second.unit),
   ]:
     assert len(str(error))
     assert len(repr(error))
@@ -349,31 +350,31 @@ def test_format_quantity():
 @pytest.mark.codegen_independent
 def test_slicing():
   # Slicing and indexing, setting items
-  quantity = np.reshape(np.arange(6), (2, 3)) * mV
-  assert_equal(quantity[:], quantity)
-  assert_equal(quantity[0], np.asarray(quantity)[0] * volt)
-  assert_equal(quantity[0:1], np.asarray(quantity)[0:1] * volt)
-  assert_equal(quantity[0, 1], np.asarray(quantity)[0, 1] * volt)
-  assert_equal(quantity[0:1, 1:], np.asarray(quantity)[0:1, 1:] * volt)
+  Array = np.reshape(np.arange(6), (2, 3)) * mV
+  assert_equal(Array[:], Array)
+  assert_equal(Array[0], np.asarray(Array)[0] * volt)
+  assert_equal(Array[0:1], np.asarray(Array)[0:1] * volt)
+  assert_equal(Array[0, 1], np.asarray(Array)[0, 1] * volt)
+  assert_equal(Array[0:1, 1:], np.asarray(Array)[0:1, 1:] * volt)
   bool_matrix = np.array([[True, False, False], [False, False, True]])
-  assert_equal(quantity[bool_matrix], np.asarray(quantity)[bool_matrix] * volt)
+  assert_equal(Array[bool_matrix], np.asarray(Array)[bool_matrix] * volt)
 
 
 @pytest.mark.codegen_independent
 def test_setting():
-  quantity = np.reshape(np.arange(6), (2, 3)) * mV
-  quantity[0, 1] = 10 * mV
-  assert quantity[0, 1] == 10 * mV
-  quantity[:, 1] = 20 * mV
-  assert np.all(quantity[:, 1] == 20 * mV)
-  quantity[1, :] = np.ones((1, 3)) * volt
-  assert np.all(quantity[1, :] == 1 * volt)
+  Array = np.reshape(np.arange(6), (2, 3)) * mV
+  Array[0, 1] = 10 * mV
+  assert Array[0, 1] == 10 * mV
+  Array[:, 1] = 20 * mV
+  assert np.all(Array[:, 1] == 20 * mV)
+  Array[1, :] = np.ones((1, 3)) * volt
+  assert np.all(Array[1, :] == 1 * volt)
   # Setting to zero should work without units as well
-  quantity[1, 2] = 0
-  assert quantity[1, 2] == 0 * mV
+  Array[1, 2] = 0
+  assert Array[1, 2] == 0 * mV
 
   def set_to_value(key, value):
-    quantity[key] = value
+    Array[key] = value
 
   with pytest.raises(DimensionMismatchError):
     set_to_value(0, 1)
@@ -654,7 +655,7 @@ def test_power():
   values = [2 * kilogram, np.array([2]) * kilogram, np.array([1, 2]) * kilogram]
   for value in values:
     assert_quantity(value ** 3, np.asarray(value) ** 3, kilogram ** 3)
-    # Test raising to a dimensionless quantity
+    # Test raising to a dimensionless Array
     assert_quantity(
       value ** (3 * volt / volt), np.asarray(value) ** 3, kilogram ** 3
     )
@@ -756,7 +757,7 @@ def test_unit_discarding_functions():
   """
   Test functions that discard units.
   """
-  from brainpy._src.math.units.unitsafefunctions import ones_like, zeros_like
+  from braincore.units.unitsafefunctions import ones_like, zeros_like
 
   values = [3 * mV, np.array([1, 2]) * mV, np.arange(12).reshape(3, 4) * mV]
   for value in values:
@@ -773,7 +774,7 @@ def test_unitsafe_functions():
   """
   Test the unitsafe functions wrapping their numpy counterparts.
   """
-  from brainpy._src.math.units.unitsafefunctions import (
+  from braincore.units.unitsafefunctions import (
     arccos,
     arccosh,
     arcsin,
@@ -840,7 +841,7 @@ def test_special_case_numpy_functions():
   """
   Test a couple of functions/methods that need special treatment.
   """
-  from brainpy._src.math.units.unitsafefunctions import diagonal, dot, ravel, trace, where
+  from braincore.units.unitsafefunctions import diagonal, dot, ravel, trace, where
 
   quadratic_matrix = np.reshape(np.arange(9), (3, 3)) * mV
 
@@ -916,12 +917,12 @@ def test_special_case_numpy_functions():
   assert_equal(np.where(cond), where(cond))
   assert_equal(np.where(cond, ar1, ar2), where(cond, ar1, ar2))
 
-  # dimensionless quantity
+  # dimensionless Array
   assert_equal(
     np.where(cond, ar1, ar2), np.asarray(where(cond, ar1 * mV / mV, ar2 * mV / mV))
   )
 
-  # quantity with dimensions
+  # Array with dimensions
   ar1 = ar1 * mV
   ar2 = ar2 * mV
   assert_equal(
@@ -938,7 +939,7 @@ def test_special_case_numpy_functions():
     where(cond, ar1, ar1 / ms)
 
   # Check setasflat (for numpy < 1.7)
-  if hasattr(Quantity, "setasflat"):
+  if hasattr(Array, "setasflat"):
     a = np.arange(10) * mV
     b = np.ones(10).reshape(5, 2) * volt
     c = np.ones(10).reshape(5, 2) * second
@@ -960,7 +961,7 @@ def test_numpy_functions_same_dimensions():
   values = [np.array([1, 2]), np.ones((3, 3))]
   units = [volt, second, siemens, mV, kHz]
 
-  from brainpy._src.math.units.unitsafefunctions import ptp
+  from braincore.units.unitsafefunctions import ptp
 
   # numpy functions
   keep_dim_funcs = [
@@ -982,10 +983,10 @@ def test_numpy_functions_same_dimensions():
     q_ar = value * unit
     for func in keep_dim_funcs:
       test_ar = func(q_ar)
-      if not get_dimensions(test_ar) is q_ar.dim:
+      if not get_dimensions(test_ar) is q_ar.unit:
         raise AssertionError(
-          f"'{func.__name__}' failed on {q_ar!r} -- dim was "
-          f"{q_ar.dim}, is now {get_dimensions(test_ar)}."
+          f"'{func.__name__}' failed on {q_ar!r} -- unit was "
+          f"{q_ar.unit}, is now {get_dimensions(test_ar)}."
         )
 
         # Python builtins should work on one-dimensional arrays
@@ -995,10 +996,10 @@ def test_numpy_functions_same_dimensions():
           q_ar = value * unit
         for func in builtins:
           test_ar = func(q_ar)
-        if not get_dimensions(test_ar) is q_ar.dim:
+        if not get_dimensions(test_ar) is q_ar.unit:
           raise AssertionError(
-            f"'{func.__name__}' failed on {q_ar!r} -- dim "
-            f"was {q_ar.dim}, is now "
+            f"'{func.__name__}' failed on {q_ar!r} -- unit "
+            f"was {q_ar.unit}, is now "
             f"{get_dimensions(test_ar)}"
           )
 
@@ -1047,14 +1048,14 @@ def test_numpy_functions_dimensionless():
         result_array = eval(f"np.{ufunc}(np.array(value))")
         assert isinstance(
           result_unitless, (np.ndarray, np.number)
-        ) and not isinstance(result_unitless, Quantity)
+        ) and not isinstance(result_unitless, Array)
         assert_equal(result_unitless, result_array)
       for ufunc in UFUNCS_DIMENSIONLESS_TWOARGS:
         result_unitless = eval(f"np.{ufunc}(value, value)")
         result_array = eval(f"np.{ufunc}(np.array(value), np.array(value))")
         assert isinstance(
           result_unitless, (np.ndarray, np.number)
-        ) and not isinstance(result_unitless, Quantity)
+        ) and not isinstance(result_unitless, Array)
         assert_equal(result_unitless, result_array)
 
     for value, unitless_value in zip(unit_values, unitless_values):
@@ -1081,7 +1082,7 @@ def test_numpy_functions_dimensionless():
 @pytest.mark.codegen_independent
 def test_numpy_functions_change_dimensions():
   """
-  Test some numpy functions that change the dimensions of the quantity.
+  Test some numpy functions that change the dimensions of the Array.
   """
   unit_values = [np.array([1, 2]) * mV, np.ones((3, 3)) * 2 * mV]
   for value in unit_values:
@@ -1183,7 +1184,7 @@ def test_numpy_functions_logical():
           assert result == NotImplemented
         except (ValueError, TypeError):
           pass  # raised on numpy >= 0.10
-      assert not isinstance(result_units, Quantity)
+      assert not isinstance(result_units, Array)
       assert_equal(result_units, result_array)
 
 
@@ -1247,7 +1248,7 @@ def test_list():
   values = [3 * mV, np.array([1, 2]) * mV, np.arange(12).reshape(4, 3) * mV]
   for value in values:
     l = value.tolist()
-    from_list = Quantity(l)
+    from_list = Array(l)
     assert have_same_dimensions(from_list, value)
     assert_equal(from_list, value)
 
@@ -1325,12 +1326,12 @@ def test_get_unit():
   Test get_unit
   """
   values = [
-    (volt.dim, volt),
-    (mV.dim, volt),
-    ((amp / metre ** 2).dim, amp / metre ** 2),
+    (volt.unit, volt),
+    (mV.unit, volt),
+    ((amp / metre ** 2).unit, amp / metre ** 2),
   ]
-  for dim, expected_unit in values:
-    unit = get_unit(dim)
+  for unit, expected_unit in values:
+    unit = get_unit(unit)
     assert isinstance(unit, Unit)
     assert unit == expected_unit
     assert float(unit) == 1.0
@@ -1359,7 +1360,7 @@ def test_switching_off_unit_checks():
   """
   Check switching off unit checks (used for external functions).
   """
-  import brainpy._src.math.units.base as fundamentalunits
+  import braincore.units.base as fundamentalunits
 
   x = 3 * second
   y = 5 * volt
@@ -1389,8 +1390,8 @@ def test_fail_for_dimension_mismatch():
   assert dim1 is DIMENSIONLESS
   assert dim2 is DIMENSIONLESS
   dim1, dim2 = fail_for_dimension_mismatch(3 * volt, 5 * volt)
-  assert dim1 is volt.dim
-  assert dim2 is volt.dim
+  assert dim1 is volt.unit
+  assert dim2 is volt.unit
 
   # examples that should raise an error
   with pytest.raises(DimensionMismatchError):
@@ -1417,7 +1418,7 @@ def test_inplace_on_scalars():
   # in the same way as for Python scalars
   for scalar in [3 * mV, 3 * mV / mV]:
     scalar_reference = scalar
-    scalar_copy = Quantity(scalar, copy=True)
+    scalar_copy = Array(scalar, copy=True)
     scalar += scalar_copy
     assert_equal(scalar_copy, scalar_reference)
     scalar *= 1.5
@@ -1431,7 +1432,7 @@ def test_inplace_on_scalars():
   # For arrays, it should use reference semantics
   for vector in [[3] * mV, [3] * mV / mV]:
     vector_reference = vector
-    vector_copy = Quantity(vector, copy=True)
+    vector_copy = Array(vector, copy=True)
     vector += vector_copy
     assert_equal(vector, vector_reference)
     vector *= 1.5
@@ -1456,17 +1457,17 @@ def test_units_vs_quantities():
   assert isinstance(1.0 / meter, Unit)
 
   # Using the unconventional type(x) == y since we want to test that
-  # e.g. meter**2 stays a Unit and does not become a Quantity however Unit
-  # inherits from Quantity and therefore both would pass the isinstance test
-  assert type(2 / meter) == Quantity
-  assert type(2 * meter) == Quantity
-  assert type(meter + meter) == Quantity
-  assert type(meter - meter) == Quantity
+  # e.g. meter**2 stays a Unit and does not become a Array however Unit
+  # inherits from Array and therefore both would pass the isinstance test
+  assert type(2 / meter) == Array
+  assert type(2 * meter) == Array
+  assert type(meter + meter) == Array
+  assert type(meter - meter) == Array
 
 
 @pytest.mark.codegen_independent
 def test_all_units_list():
-  from brainpy._src.math.units.all_units import all_units
+  from braincore.units.all_units import all_units
 
   assert meter in all_units
   assert volt in all_units
@@ -1477,19 +1478,19 @@ def test_all_units_list():
 
 @pytest.mark.codegen_independent
 def test_constants():
-  import brainpy._src.math.units.constants as constants
+  import braincore.units.constants as constants
 
   # Check that the expected names exist and have the correct dimensions
-  assert constants.avogadro_constant.dim == (1 / mole).dim
-  assert constants.boltzmann_constant.dim == (joule / kelvin).dim
-  assert constants.electric_constant.dim == (farad / meter).dim
-  assert constants.electron_mass.dim == kilogram.dim
-  assert constants.elementary_charge.dim == coulomb.dim
-  assert constants.faraday_constant.dim == (coulomb / mole).dim
-  assert constants.gas_constant.dim == (joule / mole / kelvin).dim
-  assert constants.magnetic_constant.dim == (newton / amp2).dim
-  assert constants.molar_mass_constant.dim == (kilogram / mole).dim
-  assert constants.zero_celsius.dim == kelvin.dim
+  assert constants.avogadro_constant.unit == (1 / mole).unit
+  assert constants.boltzmann_constant.unit == (joule / kelvin).unit
+  assert constants.electric_constant.unit == (farad / meter).unit
+  assert constants.electron_mass.unit == kilogram.unit
+  assert constants.elementary_charge.unit == coulomb.unit
+  assert constants.faraday_constant.unit == (coulomb / mole).unit
+  assert constants.gas_constant.unit == (joule / mole / kelvin).unit
+  assert constants.magnetic_constant.unit == (newton / amp2).unit
+  assert constants.molar_mass_constant.unit == (kilogram / mole).unit
+  assert constants.zero_celsius.unit == kelvin.unit
 
   # Check the consistency between a few constants
   assert_allclose(
