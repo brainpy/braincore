@@ -9,13 +9,6 @@ __all__ = [
 ]
 
 
-def jit(
-
-):
-  pass
-
-
-
 def _warp_data(data):
   def new_f(*args, **kwargs):
     return data
@@ -30,7 +23,7 @@ def _check_f(f):
     return _warp_data(f)
 
 
-@set_module_as('braincore')
+@set_module_as('braincore.transform')
 def ifelse(
     conditions: Union[bool, Sequence[bool]],
     branches: Sequence[Any],
@@ -45,18 +38,18 @@ def ifelse(
 
   >>> import braincore as bc
   >>> def f(a):
-  >>>    return bc.ifelse(conditions=[a > 10, a > 5, a > 2, a > 0],
-  >>>                     branches=[lambda: 1,
-  >>>                               lambda: 2,
-  >>>                               lambda: 3,
-  >>>                               lambda: 4,
-  >>>                               lambda: 5])
+  >>>    return bc.transform.ifelse(conditions=[a > 10, a > 5, a > 2, a > 0],
+  >>>                               branches=[lambda: 1,
+  >>>                                         lambda: 2,
+  >>>                                         lambda: 3,
+  >>>                                         lambda: 4,
+  >>>                                         lambda: 5])
   >>> f(1)
   4
   >>> # or, it can be expressed as:
   >>> def f(a):
-  >>>   return bc.ifelse(conditions=[a > 10, a > 5, a > 2, a > 0],
-  >>>                    branches=[1, 2, 3, 4, 5])
+  >>>   return bc.transform.ifelse(conditions=[a > 10, a > 5, a > 2, a > 0],
+  >>>                              branches=[1, 2, 3, 4, 5])
   >>> f(3)
   3
 

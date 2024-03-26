@@ -70,7 +70,7 @@ def _abstractify(args, kwargs, abstracted_axes):
     return in_avals, in_tree, keep_inputs
 
 
-class WrappedFunctionToCall(object):
+class WrappedFunToTraceState(object):
   def __init__(self, fun: Callable, return_categories: Tuple[str, ...] = ('read', 'write')):
     self.fun = fun
     self.state_trace: StateTrace = None
@@ -186,7 +186,7 @@ def make_jaxpr(
   if not all(cat in ('read', 'write') for cat in state_returns):
     raise ValueError(f"Expected `state_returns` to be 'read', 'write', or a tuple of them, got {state_returns}")
   assert callable(fun), "Expected `fun` to be a callable, got {}".format(fun)
-  fun_as_wrapped_obj = WrappedFunctionToCall(fun, return_categories=state_returns)
+  fun_as_wrapped_obj = WrappedFunToTraceState(fun, return_categories=state_returns)
   static_argnums = _ensure_index_tuple(static_argnums)
 
   @wraps(fun)

@@ -255,7 +255,7 @@ def grad(
     reduce_axes: Optional[Sequence[str]] = (),
     has_aux: Optional[bool] = None,
     return_value: Optional[bool] = False,
-):
+) -> GradientTransform | Callable[[Callable], GradientTransform]:
   """
   Compute the gradient of a scalar-valued function with respect to its arguments.
 
@@ -310,7 +310,7 @@ def vector_grad(
     argnums: Optional[Union[int, Sequence[int]]] = None,
     return_value: bool = False,
     has_aux: Optional[bool] = None,
-):
+) -> GradientTransform | Callable[[Callable], GradientTransform]:
   """Take vector-valued gradients for function ``func``.
 
   Same as `brainpy.math.grad <./brainpy.math.autograd.grad.html>`_,
@@ -377,6 +377,7 @@ def vector_grad(
                              has_aux=False if has_aux is None else has_aux)
 
 
+@set_module_as("braincore.transform")
 def jacrev(
     func: Callable,
     grad_vars: Optional[Union[State, Sequence[State], Dict[str, State]]] = None,
@@ -452,6 +453,7 @@ def jacrev(
 jacobian = jacrev
 
 
+@set_module_as("braincore.transform")
 def jacfwd(
     func: Callable,
     grad_vars: Optional[Union[State, Sequence[State], Dict[str, State]]] = None,
@@ -516,6 +518,7 @@ def jacfwd(
                            transform_params=dict(holomorphic=holomorphic))
 
 
+@set_module_as("braincore.transform")
 def hessian(
     func: Callable,
     grad_vars: Optional[Union[State, Sequence[State], Dict[str, State]]] = None,
