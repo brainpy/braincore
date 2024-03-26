@@ -27,6 +27,20 @@ class State(object):
   """
   The pointer to specify the dynamical state.
 
+  To implement a new subclass of :py:class:`~.State`, you only need to inherent this class:
+
+  Example::
+
+    class MyState(State):
+      pass
+
+  The typical examples of states are:
+
+  - :py:class:`~.ShortTermState`: The short-term state, which is used to store the short-term data in the program.
+  - :py:class:`~.LongTermState`: The long-term state, which is used to store the long-term data in the program.
+  - :py:class:`~.ParamState`: The parameter state, which is used to store the parameters in the program.
+  - :py:class:`~.RandomState`: The random generator state, which is used to store the random key in the program.
+
   Args:
     value: PyTree. It can be anything as a pyTree.
   """

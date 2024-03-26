@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
 
-"""
-TODO:
-  - [ ] Add more tests for random functions.
-  - [ ] with respect to the default dtype in  ``environ`` module
-
-"""
-
 from collections import namedtuple
 from functools import partial
 from operator import index
