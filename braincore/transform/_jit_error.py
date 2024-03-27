@@ -102,8 +102,11 @@ def _cond(err_fun, pred, err_arg):
        err_arg)
 
 
-def _error_msg(msg):
-  raise ValueError(msg)
+def _error_msg(msg, arg=None):
+  if arg is None:
+    raise ValueError(msg)
+  else:
+    raise ValueError(msg.format(arg))
 
 
 @set_module_as('braincore.transform')
@@ -128,7 +131,6 @@ def jit_error(pred, err_fun: Union[Callable, str], err_arg=None, scope: str = 'a
   """
   if isinstance(err_fun, str):
     err_fun = partial(_error_msg, err_fun)
-    assert err_arg is None, "err_arg should be None when err_fun is a string."
   if scope is None:
     pred = pred
   elif scope == 'all':
