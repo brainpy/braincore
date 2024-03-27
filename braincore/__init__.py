@@ -23,6 +23,6 @@ from ._utils import __all__ as _utils_all
 
 __all__ = (
     ['environ', 'share', 'surrogate', 'random', 'mixin', 'math', 'transform', 'integrate'] +
-    _projection_all + _module_all + _state_all + _utils_all
+    _module_all + _projection_all + _state_all + _utils_all
 )
-del _projection_all, _module_all, _state_all, _utils_all
+del _module_all, _projection_all, _state_all, _utils_all

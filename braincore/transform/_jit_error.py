@@ -4,7 +4,6 @@ from typing import Callable, Union
 import jax
 from jax import numpy as jnp
 from jax.core import Primitive, ShapedArray
-from jax.experimental.host_callback import id_tap
 from jax.interpreters import batching, mlir, xla
 from jax.lax import cond
 
@@ -83,7 +82,7 @@ mlir.register_lowering(_all_no_vmap_prim, mlir.lower_fun(_all_without_vmap_imp, 
 
 
 def _err_jit_true_branch(err_fun, x):
-  id_tap(err_fun, x)
+  jax.debug.callback(err_fun, x)
   return
 
 
@@ -93,8 +92,8 @@ def _err_jit_false_branch(x):
 
 def _cond(err_fun, pred, err_arg):
   @wraps(err_fun)
-  def true_err_fun(arg, transforms):
-    err_fun(arg)
+  def true_err_fun(*arg):
+    err_fun(*arg)
 
   cond(pred,
        partial(_err_jit_true_branch, true_err_fun),
@@ -102,8 +101,8 @@ def _cond(err_fun, pred, err_arg):
        err_arg)
 
 
-def _error_msg(msg, arg=None):
-  if arg is None:
+def _error_msg(msg, *arg):
+  if len(arg) == 0:
     raise ValueError(msg)
   else:
     raise ValueError(msg.format(arg))

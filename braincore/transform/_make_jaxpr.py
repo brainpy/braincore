@@ -6,27 +6,27 @@ StateManager instance can be used to manage the states in the JAX program. The m
 return the shape, dtype, and named shape of the output of the function.
 
 """
+
 import functools
 import operator
 from collections.abc import Hashable, Iterable, Sequence
-from contextlib import ExitStack
 from typing import Any, Callable, Tuple, Union
 
 import jax
-from jax._src.core import DBIdx
-from jax._src.linear_util import annotate
-from jax._src.traceback_util import api_boundary
-from jax.api_util import flatten_fun, argnums_partial, shaped_abstractify
-from jax.extend import source_info_util
-from jax.extend.linear_util import wrap_init, WrappedFun
 from jax.interpreters import partial_eval as pe
-from jax.util import unzip2, wraps
+from jax.util import wraps
 
-from braincore._state import StateTrace, StateManager
+from braincore._state import State, StateTrace
 
 PyTree = Any
 
-__all__ = ["make_jaxpr"]
+__all__ = ["StatefulFunForJaxpr", "make_jaxpr", ]
+
+
+def _assign_states(states, state_vals):
+  assert len(states) == len(state_vals), 'State length mismatch.'
+  for st, val in zip(states, state_vals):
+    st.value = val
 
 
 def _ensure_index_tuple(x: Any) -> tuple[int, ...]:
@@ -35,64 +35,215 @@ def _ensure_index_tuple(x: Any) -> tuple[int, ...]:
   try:
     return (operator.index(x),)
   except TypeError:
-    return tuple(map(operator.index, x))
+    return tuple(jax.util.safe_map(operator.index, x))
 
 
-def _broadcast_prefix(prefix_tree: Any, full_tree: Any, is_leaf: Callable[[Any], bool] | None = None) -> list[Any]:
-  # If prefix_tree is not a tree prefix of full_tree, this code can raise a
-  # ValueError; use prefix_errors to find disagreements and raise more precise
-  # error messages.
-  result = []
-  num_leaves = lambda t: jax.tree.structure(t).num_leaves
-  add_leaves = lambda x, subtree: result.extend([x] * num_leaves(subtree))
-  jax.tree.map(add_leaves, prefix_tree, full_tree, is_leaf=is_leaf)
-  return result
+class StatefulFunForJaxpr(object):
+  """
+  A wrapper class for a function that collects the states that are read and written by the function. The states are
+  collected by the function and returned as a StateManager instance. The StateManager instance can be used to
+  manage the states in the JAX program. The class provides a function called `states` that returns the states
+  that are read and written by the function. The class provides a function called `to_state_manager` that returns
+  a StateManager instance that contains the states that are read and written by the function. The class provides
+  a function called `__call__` that wraps the function and returns the states that are read and written by the
+  function and the output of the function.
 
 
-def _flat_axes_specs(abstracted_axes, *args, **kwargs) -> list[pe.AbstractedAxesSpec]:
-  if kwargs: raise NotImplementedError
+  Args:
+    fun: The function whose ``jaxpr`` is to be computed. Its positional
+      arguments and return value should be arrays, scalars, or standard Python
+      containers (tuple/list/dict) thereof.
+    static_argnums: See the :py:func:`jax.jit` docstring.
+    axis_env: Optional, a sequence of pairs where the first element is an axis
+        name and the second element is a positive integer representing the size of
+        the mapped axis with that name. This parameter is useful when lowering
+        functions that involve parallel communication collectives, and it
+        specifies the axis name/size environment that would be set up by
+        applications of :py:func:`jax.pmap`.
+    abstracted_axes: Optional, a pytree with the same structure as the input
+        arguments to ``fun``. The leaves of the pytree can be either None or a
+        dict with axis names as keys and integers as values. If the leaf is None,
+        then the corresponding axis is not abstracted. If the leaf is a dict, then
+        the corresponding axis is abstracted, and the dict specifies the axis name
+        and size. The abstracted axes are used to infer the input type of the
+        function. If None, then all axes are abstracted.
+  """
 
-  def ax_leaf(l):
-    return (isinstance(l, dict) and jax.tree_util.all_leaves(l.values()) or
-            isinstance(l, tuple) and jax.tree_util.all_leaves(l, lambda x: x is None))
-
-  return _broadcast_prefix(abstracted_axes, args, ax_leaf)
-
-
-def _abstractify(args, kwargs, abstracted_axes):
-  flat_args, in_tree = jax.tree.flatten((args, kwargs))
-  if abstracted_axes is None:
-    return map(shaped_abstractify, flat_args), in_tree, [True] * len(flat_args)
-  else:
-    axes_specs = _flat_axes_specs(abstracted_axes, *args, **kwargs)
-    in_type = pe.infer_lambda_input_type(axes_specs, flat_args)
-    in_avals, keep_inputs = unzip2(in_type)
-    return in_avals, in_tree, keep_inputs
-
-
-class WrappedFunToTraceState(object):
-  def __init__(self, fun: Callable, return_categories: Tuple[str, ...] = ('read', 'write')):
+  def __init__(
+      self,
+      fun: Callable,
+      static_argnums: int | Iterable[int] = (),
+      axis_env: Sequence[tuple[Hashable, int]] | None = None,
+      abstracted_axes: Any | None = None,
+      state_returns: Union[str, Tuple[str, ...]] = ('read', 'write')
+  ):
     self.fun = fun
-    self.state_trace: StateTrace = None
-    self.return_categories = return_categories
+    self._static_argnums = _ensure_index_tuple(tuple() if static_argnums is None else static_argnums)
+    self._static_args_last = ()
+    self._axis_env = axis_env
+    self._abstracted_axes = abstracted_axes
+    self._jaxpr: jax.core.ClosedJaxpr = None
+    self._out_shapes: PyTree = None
+    self._jaxpr_out_tree = None
+    self._trace: StateTrace = StateTrace()
+    self.state_returns = tuple(state_returns) if isinstance(state_returns, (tuple, list)) else (state_returns,)
 
-  def init_trace_newarg(self, trace_new_arg):
-    self.state_trace = StateTrace(trace_new_arg)
+  def __repr__(self) -> str:
+    return (f"{self.__class__.__name__}({self.fun}, "
+            f"static_argnums={self._static_argnums}, "
+            f"axis_env={self._axis_env}, "
+            f"abstracted_axes={self._abstracted_axes})")
 
-  def __call__(self, *args, **kwargs) -> Tuple[Any, Tuple]:
-    out = self.fun(*args)
-    assert self.state_trace is not None, "before calling the function, please assign its state trace instance."
-    return out, self.state_trace.collect_values(*self.return_categories)
+  @property
+  def jaxpr(self):
+    if self._jaxpr is None:
+      raise ValueError(f"before accessing the jaxpr, please call "
+                       f"'{StatefulFunForJaxpr.__name__}.make_jaxpr()' function.")
+    return self._jaxpr
 
-  def to_state_manager(self) -> StateManager:
-    manager = StateManager()
-    for st, ty in zip(self.state_trace.states, self.state_trace.types):
-      if ty in self.return_categories:
-        manager[id(st)] = st
-    return manager
+  @property
+  def out_shapes(self):
+    if self._out_shapes is None:
+      raise ValueError(f"before accessing the output shapes, please call "
+                       f"'{StatefulFunForJaxpr.__name__}.make_jaxpr()' function.")
+    return self._out_shapes
 
-  def __repr__(self):
-    return f"WrappedFunctionToCall({self.fun})"
+  @property
+  def out_treedef(self):
+    if self._jaxpr_out_tree is None:
+      raise ValueError(f"before accessing the output tree, please call "
+                       f"'{StatefulFunForJaxpr.__name__}.make_jaxpr()' function.")
+    return self._jaxpr_out_tree
+
+  @property
+  def states_to_read(self):
+    return tuple([st for st, ty in zip(self._trace.states, self._trace.types) if ty == 'read'])
+
+  @property
+  def states_to_write(self):
+    return tuple([st for st, ty in zip(self._trace.states, self._trace.types) if ty == 'write'])
+
+  @property
+  def states(self):
+    return tuple(self._trace.states)
+
+  @property
+  def state_values(self):
+    return self._trace.collect_values('read', 'write')
+
+  def compile_and_get_states_by_static_args(self, static_args, *args, **kwargs):
+    """
+    Get the states that are read and written by the function.
+
+    Args:
+      static_args: The static arguments to the function.
+      *args: The arguments to the function.
+      **kwargs: The keyword arguments to the function.
+
+    Returns:
+      The states that are read and written by the function.
+    """
+    pass
+
+  def _init_trace_and_newarg(self) -> None:
+    self._trace: StateTrace = StateTrace()
+    main = jax.core.thread_local_state.trace_state.trace_stack.stack[-1]
+    frame = main.jaxpr_stack[-1]
+    trace = pe.DynamicJaxprTrace(main, jax.core.cur_sublevel())
+    self._trace.set_new_arg(functools.partial(_new_arg, frame, trace))
+
+  def _wrapped_fun_to_eval(self, *args, **kwargs) -> Tuple[Any, Tuple[State, ...]]:
+    """
+    Wrap the function and return the states that are read and written by the function and the output of the function.
+
+    Args:
+      *args: The arguments to the function.
+      **kwargs: The keyword arguments to the function.
+
+    Returns:
+      A tuple of the states that are read and written by the function and the output of the function.
+    """
+    self._init_trace_and_newarg()
+    with self._trace:
+      out = self.fun(*args, **kwargs)
+      state_values = self._trace.collect_values('read', 'write')
+    self._trace.recovery_original_values()
+    return out, state_values
+
+  def make_jaxpr(self, *args, **kwargs):
+    """Creates a function that produces its jaxpr given example args.
+
+    Args:
+      *args: The arguments to the function.
+      **kwargs: The keyword arguments to the function.
+
+    Returns:
+      A ``ClosedJaxpr`` representation of ``fun`` on those arguments. If the
+      argument ``return_shape`` is ``True``, then the returned function instead
+      returns a pair where the first element is the ``ClosedJaxpr``
+      representation of ``fun`` and the second element is a pytree representing
+      the structure, shape, dtypes, and named shapes of the output of ``fun``.
+
+    """
+    # parameters
+    if self._static_argnums:
+      dyn_argnums = [i for i in range(len(args)) if i not in self._static_argnums]
+      self._static_args_last = tuple(args[i] for i in range(len(args)) if i in dyn_argnums)
+
+    # jaxpr
+    jaxpr, (out_shapes, state_shapes) = jax.make_jaxpr(self._wrapped_fun_to_eval,
+                                                       static_argnums=self._static_argnums,
+                                                       axis_env=self._axis_env,
+                                                       return_shape=True,
+                                                       abstracted_axes=self._abstracted_axes)(*args, **kwargs)
+
+    # returns
+    self._jaxpr_out_tree = jax.tree.structure((out_shapes, state_shapes))
+    self._out_shapes = out_shapes
+    self._jaxpr = jaxpr
+    return self
+
+  def jaxpr_call(self, state_vals, *args, **kwargs) -> Any:
+    """
+    Call the function at the JAX Jaxpr level.
+
+    Args:
+      *args: The arguments to the function.
+      **kwargs: The keyword arguments to the function.
+
+    Returns:
+      State values and the function output.
+    """
+    # parameters
+    _static_args_last = ()
+    if self._static_argnums:
+      _static_args_last = tuple(args[i] for i in range(len(args)) if i in self._static_argnums)
+      args = tuple(args[i] for i in range(len(args)) if i not in self._static_argnums)
+    if self._static_args_last != _static_args_last:
+      raise ValueError(f"the function is called with different static arguments. "
+                       f"Expected: {self._static_args_last}, got: {_static_args_last}")
+    args = jax.tree.flatten((args, kwargs, state_vals))[0]
+    # calling the function
+    jaxpr_outs = jax.core.eval_jaxpr(self.jaxpr.jaxpr, self.jaxpr.consts, *args)
+    out, new_state_vals = self.out_treedef.unflatten(jaxpr_outs)
+    assert len(new_state_vals) == len(state_vals)
+    return new_state_vals, out
+
+  def jaxpr_call_without_states(self, *args, **kwargs) -> Any:
+    """
+    Call the function at the JAX Jaxpr level.
+
+    Args:
+      *args: The arguments to the function.
+      **kwargs: The keyword arguments to the function.
+
+    Returns:
+      The output of the function.
+    """
+    state_vals, out = self.jaxpr_call([st.value for st in self.states], *args, **kwargs)
+    for st, val in zip(self.states, state_vals):
+      st.value = val
+    return out
 
 
 def make_jaxpr(
@@ -102,7 +253,8 @@ def make_jaxpr(
     return_shape: bool = False,
     abstracted_axes: Any | None = None,
     state_returns: Union[str, Tuple[str, ...]] = ('read', 'write')
-) -> Callable[..., (Tuple[jax.core.ClosedJaxpr, StateManager] | Tuple[jax.core.ClosedJaxpr, StateManager, PyTree])]:
+) -> Callable[..., (Tuple[jax.core.ClosedJaxpr, Tuple[State, ...]] |
+                    Tuple[jax.core.ClosedJaxpr, Tuple[State, ...], PyTree])]:
   """Creates a function that produces its jaxpr given example args.
 
   Args:
@@ -178,40 +330,16 @@ def make_jaxpr(
       g:f32[] = mul f c
     in (g,) }
   """
-  if isinstance(state_returns, str):
-    state_returns = (state_returns,)
-  if not all(cat in ('read', 'write') for cat in state_returns):
-    raise ValueError(f"Expected `state_returns` to be 'read', 'write', or a tuple of them, got {state_returns}")
-  assert callable(fun), "Expected `fun` to be a callable, got {}".format(fun)
-  fun_as_wrapped_obj = WrappedFunToTraceState(fun, return_categories=state_returns)
-  static_argnums = _ensure_index_tuple(static_argnums)
+
+  stateful_fun = StatefulFunForJaxpr(fun, static_argnums, axis_env, abstracted_axes, state_returns)
 
   @wraps(fun)
-  @api_boundary
   def make_jaxpr_f(*args, **kwargs):
-    f = wrap_init(fun_as_wrapped_obj)
-    if static_argnums:
-      dyn_argnums = [i for i in range(len(args)) if i not in static_argnums]
-      f, args = argnums_partial(f, dyn_argnums, args)
-    in_avals, in_tree, keep_inputs = _abstractify(args, kwargs, abstracted_axes)
-    in_type = tuple(zip(in_avals, keep_inputs))
-    f, out_tree = flatten_fun(f, in_tree)
-    f = annotate(f, in_type)
-    debug_info = pe.debug_info(fun_as_wrapped_obj, in_tree, out_tree, True, 'make_jaxpr')
-    with ExitStack() as stack:
-      for axis_name, size in axis_env or []:
-        stack.enter_context(jax.core.extend_axis_env(axis_name, size, None))
-      jaxpr, out_type, consts = trace_to_jaxpr_dynamic2(f, debug_info=debug_info)
-    closed_jaxpr = jax.core.ClosedJaxpr(jaxpr, consts)
-    state_stack = fun_as_wrapped_obj.to_state_manager()
-    fun_as_wrapped_obj.state_trace.recovery_original_values()
-
+    stateful_fun.make_jaxpr(*args, **kwargs)
     if return_shape:
-      out_avals, _ = unzip2(out_type)
-      out_shapes_flat = [jax.ShapeDtypeStruct(a.shape, a.dtype, a.named_shape) for a in out_avals]
-      return closed_jaxpr, state_stack, jax.tree.unflatten(out_tree(), out_shapes_flat)
+      return stateful_fun.jaxpr, stateful_fun.states, stateful_fun.out_shapes
     else:
-      return closed_jaxpr, state_stack
+      return stateful_fun.jaxpr, stateful_fun.states
 
   # wrapped jaxpr builder function
   make_jaxpr_f.__module__ = "braincore.transform"
@@ -220,97 +348,3 @@ def make_jaxpr(
   if hasattr(fun, "__name__"):
     make_jaxpr_f.__name__ = f"make_jaxpr({fun.__name__})"
   return make_jaxpr_f
-
-
-@jax.profiler.annotate_function
-def trace_to_jaxpr_dynamic2(
-    fun: WrappedFun,
-    debug_info: pe.DebugInfo | None = None
-) -> tuple[jax.core.Jaxpr, jax.core.OutputType, list[Any]]:
-  with jax.core.new_main(pe.DynamicJaxprTrace, dynamic=True) as main:  # type: ignore
-    main.jaxpr_stack = ()  # type: ignore
-    jaxpr, out_type, consts = trace_to_subjaxpr_dynamic2(fun, main, debug_info)
-    del main, fun
-  return jaxpr, out_type, consts
-
-
-# modified from jax.interpreters.partial_eval.DynamicJaxprTrace.new_arg()
-def _new_arg(frame, trace, aval):
-  tracer = pe.DynamicJaxprTracer(trace, aval, source_info_util.current())
-  frame.tracers.append(tracer)
-  frame.tracer_to_var[id(tracer)] = var = frame.newvar(aval)
-  frame.invars.append(var)
-  return tracer
-
-
-def trace_to_subjaxpr_dynamic2(
-    fun: WrappedFun,
-    main: jax.core.MainTrace,
-    debug_info: pe.DebugInfo | None = None
-) -> tuple[jax.core.Jaxpr, jax.core.OutputType, list[Any]]:
-  in_avals, keep_inputs = unzip2(fun.in_type)
-  frame = pe.JaxprStackFrame()
-  frame.debug_info = debug_info
-  with pe.extend_jaxpr_stack(main, frame), source_info_util.reset_name_stack():
-    trace = pe.DynamicJaxprTrace(main, jax.core.cur_sublevel())
-    in_tracers = _input_type_to_tracers(trace.new_arg, in_avals)
-    in_tracers = [t for t, keep in zip(in_tracers, keep_inputs) if keep]
-    # append the new arg function to the trace at this frame
-    fun.f.init_trace_newarg(functools.partial(_new_arg, frame, trace))
-    # collect state reads and writes
-    with fun.f.state_trace:
-      ans = fun.call_wrapped(*in_tracers)
-    # full_raise the ans to get the jaxpr
-    out_tracers = map(trace.full_raise, ans)
-    jaxpr, out_type, consts = frame.to_jaxpr2(out_tracers)
-    del fun, main, trace, frame, out_tracers, ans
-  return jaxpr, out_type, consts
-
-
-def _input_type_to_tracers(
-    new_arg: Callable[[jax.core.AbstractValue], jax.core.Tracer],
-    in_avals: Sequence[jax.core.AbstractValue]
-) -> Sequence[jax.core.Tracer]:
-  # Create input Tracers given input AbstractValues, each of which can contain
-  # DeBruijn indices which refer to positions in the input argument list. That
-  # is, each element `a` of `in_avals` can have DBIdx instances in its shape,
-  # which must refer to positions left of `a`'s.
-  in_tracers: list[jax.core.Tracer] = []
-
-  def _substitute_tracers_in_aval(a: jax.core.AbstractValue) -> jax.core.AbstractValue:
-    if isinstance(a, jax.core.DShapedArray) and any(type(d) is DBIdx for d in a.shape):
-      shape = [in_tracers[d.val] if type(d) is DBIdx else d for d in a.shape]  # type: ignore
-      return a.update(shape=tuple(shape))
-    return a
-
-  for a in in_avals:
-    in_tracers.append(new_arg(_substitute_tracers_in_aval(a)))
-  return in_tracers
-
-# if __name__ == '__main__':
-#
-#   import jax.numpy as jnp
-#
-#   jaxpr, states = make_jaxpr(jnp.sin)(3.0)
-#   print(jaxpr)
-#   print(states)
-#
-#   st1 = State(jnp.ones(10))
-#
-#   def fa(x):
-#     st1.value = x + st1.value
-#
-#
-#   jaxpr, states = make_jaxpr(fa)(jnp.zeros(1))
-#   print(jaxpr)
-#   print(states)
-#
-#
-#   def ffa(x):
-#     jaxpr, states = make_jaxpr(fa)(x)
-#     return 1.
-#
-#
-#   jaxpr, states = make_jaxpr(ffa)(jnp.zeros(1))
-#   print(jaxpr)
-#   print(states)

@@ -262,6 +262,10 @@ def grad(
   Compute the gradient of a scalar-valued function with respect to its arguments.
 
   Args:
+    reduce_axes:
+    allow_int:
+    holomorphic:
+    grad_vars:
     fun: the scalar-valued function to be differentiated.
     argnums: (int or tuple of ints) optional. Specifies which positional
       argument(s) to differentiate with respect to.

@@ -209,6 +209,7 @@ class StateTrace(object):
     self._id2index = dict()
     self._org_values = []
     self._jax_trace_new_arg = new_arg
+    self._written_ids = set()
 
   def set_new_arg(self, new_arg: Callable) -> None:
     self._jax_trace_new_arg = new_arg
@@ -250,8 +251,10 @@ class StateTrace(object):
     id_ = id(state)
     if id_ not in self._id2index:
       self.read_its_value(state)
-    index = self._id2index[id_]
-    self.types[index] = 'write'
+    if id_ not in self._written_ids:
+      index = self._id2index[id_]
+      self.types[index] = 'write'
+      self._written_ids.add(id_)
 
   def collect_values(self, *categories: str) -> Tuple:
     """
