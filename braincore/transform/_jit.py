@@ -133,9 +133,7 @@ def jit(
     A wrapped version of ``fun``, set up for just-in-time compilation.
 
   """
-  if static_argnums is None:
-    static_argnums = tuple()
-  static_argnums = _ensure_index_tuple(static_argnums)
+  static_argnums = _ensure_index_tuple(tuple() if static_argnums is None else static_argnums)
   fun = StatefulFunction(fun, static_argnums=static_argnums, abstracted_axes=abstracted_axes)
   jit_fun = jax.jit(fun.jaxpr_call,
                     static_argnums=tuple(i + 1 for i in static_argnums),
