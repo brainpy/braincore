@@ -1,5 +1,6 @@
 from typing import Any, Tuple, Dict, List, Callable
 
+import numpy as np
 import jax
 from jax.api_util import shaped_abstractify
 
@@ -10,8 +11,8 @@ __all__ = [
   'StateManager', 'visible_state_dict',
 ]
 
-PyTree = Any
 _pytree_registered_objects = set()
+state_stack_list: List['StateTrace'] = []
 
 
 def _register_pytree_cls(cls):
@@ -20,12 +21,13 @@ def _register_pytree_cls(cls):
     _pytree_registered_objects.add(cls)
 
 
-state_stack_list: List['StateTrace'] = []
+PyTree = Any
+max_int = np.iinfo(np.int32)
 
 
 class State(object):
   """
-  The pointer to specify the dynamical state.
+  The pointer to specify the dynamical data.
 
   To implement a new subclass of :py:class:`~.State`, you only need to inherent this class:
 
@@ -34,7 +36,7 @@ class State(object):
     class MyState(State):
       pass
 
-  The typical examples of states are:
+  The typical examples of :py:class:`~.State` subclass are:
 
   - :py:class:`~.ShortTermState`: The short-term state, which is used to store the short-term data in the program.
   - :py:class:`~.LongTermState`: The long-term state, which is used to store the long-term data in the program.
@@ -53,7 +55,6 @@ class State(object):
     self._value = value
     self._tree = jax.tree.structure(value)
     self._level = len(state_stack_list)
-    _register_pytree_cls(self.__class__)
 
   @property
   def value(self):
@@ -92,7 +93,7 @@ class State(object):
       and the second element is a treedef representing the
       structure of the flattened tree.
     """
-    return (self._value,), None
+    return (self._value,), (self._level,)
 
   @classmethod
   def tree_unflatten(cls, aux_data, flat_contents):
@@ -105,7 +106,10 @@ class State(object):
     Returns:
       The variable.
     """
-    return cls(flat_contents[0], )
+    (_level,) = aux_data
+    self = cls(flat_contents[0])
+    self._level = max_int
+    return self
 
   def __repr__(self):
     return f'{self.__class__.__name__}({self._value})'
@@ -136,7 +140,6 @@ class ParamState(LongTermState):
   __module__ = 'braincore'
 
 
-@jax.tree_util.register_pytree_node_class
 class StateManager(DictManager):
   """
   State stack, for collecting all :py:class:`~.State` used in the program.
@@ -197,7 +200,7 @@ class visible_state_dict(StateManager):
 
 class StateTrace(object):
   """
-  The auto stack, which is used to store the states automatically.
+  The state trace, which is used to trace the states automatically.
   """
 
   def __init__(self, new_arg: Callable = None):
@@ -220,6 +223,12 @@ class StateTrace(object):
     state_stack_list.pop()
 
   def read_its_value(self, state: State) -> None:
+    """
+    Read the value of the state.
+
+    Args:
+      state: The state.
+    """
     id_ = id(state)
     if id_ not in self._id2index:
       self._id2index[id_] = len(self.states)
@@ -229,6 +238,12 @@ class StateTrace(object):
       self.new_arg(state)
 
   def write_its_value(self, state: State) -> None:
+    """
+    Write the value of the state.
+
+    Args:
+      state: The state.
+    """
     id_ = id(state)
     if id_ not in self._id2index:
       self.read_its_value(state)
@@ -236,6 +251,15 @@ class StateTrace(object):
     self.types[index] = 'write'
 
   def collect_values(self, *categories: str) -> Tuple:
+    """
+    Collect the values by the given categories.
+
+    Args:
+      *categories: The categories.
+
+    Returns:
+      results: The values.
+    """
     results = []
     for st, ty in zip(self.states, self.types):
       if ty in categories:
@@ -243,22 +267,9 @@ class StateTrace(object):
     return tuple(results)
 
   def recovery_original_values(self) -> None:
+    """
+    Recovery the original values.
+    """
     for st, val in zip(self.states, self._org_values):
+      # internal use
       st._value = val
-
-
-def sate_compose(first: dict, *others: dict):
-  """
-  Compose multiple dictionaries as a ``DictManager``.
-
-  Args:
-    first: The dict.
-    others: Dicts.
-
-  Returns:
-    stack: The composed stack.
-  """
-  stack = StateManager(first)
-  for oth in others:
-    stack.update(oth)
-  return stack
