@@ -210,6 +210,9 @@ class StateTrace(object):
     self._org_values = []
     self._jax_trace_new_arg = new_arg
 
+  def set_new_arg(self, new_arg: Callable) -> None:
+    self._jax_trace_new_arg = new_arg
+
   def new_arg(self, state: State) -> None:
     if self._jax_trace_new_arg is not None:
       # internal use
