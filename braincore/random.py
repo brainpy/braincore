@@ -71,17 +71,6 @@ class RandomState(State):
     i = print_code.index('(')
     return f'{self.__class__.__name__}(key={print_code[i:]})'
 
-  @property
-  def value(self):
-    if isinstance(self._value, ArrayImpl):
-      if self._value.is_deleted():
-        self.seed()
-    return self._value
-
-  @value.setter
-  def value(self, value):
-    self._value = value
-
   # ------------------- #
   # seed and random key #
   # ------------------- #
@@ -113,9 +102,9 @@ class RandomState(State):
     """Create a new seed from the current seed.
     """
     if not isinstance(self.value, jax.Array):
-      self._value = jnp.asarray(self.value, dtype=jnp.uint32)
+      self.value = jnp.asarray(self.value, dtype=jnp.uint32)
     keys = jr.split(self.value, num=2)
-    self._value = keys[0]
+    self.value = keys[0]
     return keys[1]
 
   def split_keys(self, n: int):
@@ -129,7 +118,7 @@ class RandomState(State):
       The number of seeds to generate.
     """
     keys = jr.split(self.value, n + 1)
-    self._value = keys[0]
+    self.value = keys[0]
     return keys[1:]
 
   # ---------------- #
