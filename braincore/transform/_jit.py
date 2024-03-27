@@ -8,7 +8,7 @@ import jax
 from jax._src import sharding_impls
 from jax.lib import xla_client as xc
 
-from ._make_jaxpr import StatefulFunForJaxpr, _ensure_index_tuple, _assign_states
+from ._make_jaxpr import StatefulFunction, _ensure_index_tuple, _assign_states
 
 __all__ = ['jit']
 
@@ -136,7 +136,7 @@ def jit(
   if static_argnums is None:
     static_argnums = tuple()
   static_argnums = _ensure_index_tuple(static_argnums)
-  fun = StatefulFunForJaxpr(fun, static_argnums=static_argnums, abstracted_axes=abstracted_axes)
+  fun = StatefulFunction(fun, static_argnums=static_argnums, abstracted_axes=abstracted_axes)
   jit_fun = jax.jit(fun.jaxpr_call,
                     static_argnums=tuple(i + 1 for i in static_argnums),
                     donate_argnums=donate_argnums,
@@ -151,10 +151,9 @@ def jit(
                     **kwargs)
 
   @functools.wraps(fun.fun)
-  def fun_to_jit(*args, **kwargs):
-    static_args = tuple(args[i] for i in static_argnums)
-    states = fun.compile_and_get_states_by_static_args(static_args)
-    state_vals, outs = jit_fun([st.value for st in states], *args, **kwargs)
+  def fun_to_jit(*args, **params):
+    states = fun.compile_and_get_states_by_static_args(*args, **kwargs)
+    state_vals, outs = jit_fun([st.value for st in states], *args, **params)
     _assign_states(states, state_vals)
     return outs
 

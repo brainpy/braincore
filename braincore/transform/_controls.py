@@ -9,7 +9,7 @@ import numpy as np
 
 from braincore._common import set_module_as
 from ._jit_error import jit_error
-from ._make_jaxpr import StatefulFunForJaxpr, _assign_states
+from ._make_jaxpr import StatefulFunction, _assign_states
 from ._progress_bar import ProgressBar
 
 Carry = TypeVar('Carry')
@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-def _wrapped_fun(stateful_fun: StatefulFunForJaxpr, states, return_states=True):
+def _wrapped_fun(stateful_fun: StatefulFunction, states, return_states=True):
   @wraps(stateful_fun.fun)
   def wrapped_branch(state_vals, *operands):
     assert len(states) == len(state_vals)
@@ -100,11 +100,11 @@ def cond(pred, true_fun: Callable, false_fun: Callable, *operands):
       return false_fun(*operands)
 
   # evaluate jaxpr
-  true_fun_wrap = StatefulFunForJaxpr(true_fun).make_jaxpr(*operands)
-  false_fun_wrap = StatefulFunForJaxpr(false_fun).make_jaxpr(*operands)
+  true_fun_wrap = StatefulFunction(true_fun).make_jaxpr(*operands)
+  false_fun_wrap = StatefulFunction(false_fun).make_jaxpr(*operands)
 
   # wrap the functions
-  all_states = tuple(set(true_fun_wrap.states + false_fun_wrap.states))
+  all_states = tuple(set(true_fun_wrap.get_states() + false_fun_wrap.get_states()))
   true_fun = _wrapped_fun(true_fun_wrap, all_states)
   false_fun = _wrapped_fun(false_fun_wrap, all_states)
 
@@ -218,12 +218,12 @@ def switch(index, branches: Sequence[Callable], *operands):
     return branches[int(index)](*operands)
 
   # evaluate jaxpr
-  wrapped_branches = [StatefulFunForJaxpr(branch) for branch in branches]
+  wrapped_branches = [StatefulFunction(branch) for branch in branches]
   for wrapped_branch in wrapped_branches:
     wrapped_branch.make_jaxpr(*operands)
 
   # wrap the functions
-  all_states = tuple(set(reduce(operator.add, [wrapped_branch.states for wrapped_branch in wrapped_branches])))
+  all_states = tuple(set(reduce(operator.add, [wrapped_branch.get_states() for wrapped_branch in wrapped_branches])))
   branches = tuple(_wrapped_fun(wrapped_branch, all_states) for wrapped_branch in wrapped_branches)
 
   # operands
@@ -325,7 +325,7 @@ def ifelse(conditions, branches, *operands, check_cond: bool = True):
   return switch(index, branches, *operands)
 
 
-def _wrapped_scan_fun(stateful_fun: StatefulFunForJaxpr, states, pbar_runner=None):
+def _wrapped_scan_fun(stateful_fun: StatefulFunction, states, pbar_runner=None):
   @wraps(stateful_fun.fun)
   def wrapped_fun(new_carry, inputs):
     state_vals, carry = new_carry
@@ -476,8 +476,8 @@ def scan(
   # ------------------------------ #
   xs_avals = [jax.core.raise_to_shaped(jax.core.get_aval(x)) for x in xs_flat]
   x_avals = [jax.core.mapped_aval(length, 0, aval) for aval in xs_avals]
-  stateful_fun = StatefulFunForJaxpr(f).make_jaxpr(init, xs_tree.unflatten(x_avals))
-  all_states = stateful_fun.states
+  stateful_fun = StatefulFunction(f).make_jaxpr(init, xs_tree.unflatten(x_avals))
+  all_states = stateful_fun.get_states()
   wrapped_f = _wrapped_scan_fun(stateful_fun, all_states,
                                 progress_bar.init(length) if progress_bar is not None else None)
 
@@ -594,9 +594,9 @@ def while_loop(
       pass
 
   # evaluate jaxpr
-  stateful_cond = StatefulFunForJaxpr(cond_fun).make_jaxpr(init_val)
-  stateful_body = StatefulFunForJaxpr(body_fun).make_jaxpr(init_val)
-  all_states = tuple(set(stateful_cond.states + stateful_body.states))
+  stateful_cond = StatefulFunction(cond_fun).make_jaxpr(init_val)
+  stateful_body = StatefulFunction(body_fun).make_jaxpr(init_val)
+  all_states = tuple(set(stateful_cond.get_states() + stateful_body.get_states()))
   new_cond_fun = _wrapped_fun(stateful_cond, all_states, return_states=False)
   new_body_fun = _wrapped_fun(stateful_body, all_states, return_states=True)
 

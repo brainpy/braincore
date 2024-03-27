@@ -6,9 +6,6 @@ import jax.numpy as jnp
 import braincore as bc
 
 
-jax.core.thread_local_state.trace_state.trace_stack.stack[-1], jax.core.cur_sublevel()
-
-
 class TestMakeJaxpr(unittest.TestCase):
 
   def test_compar_jax_make_jaxpr(self):
@@ -31,41 +28,41 @@ class TestMakeJaxpr(unittest.TestCase):
     self.assertTrue(len(jaxpr2.out_avals) == 2)
     self.assertTrue(len(jaxpr2.consts) == 0)
 
-  def test_FunWrapperForStateJaxpr_1(self):
+  def test_StatefulFunction_1(self):
     def func4(arg):  # Arg is a pair
       temp = arg[0] + jnp.sin(arg[1]) * 3.
       c = bc.random.rand_like(arg[0])
       return jnp.sum(temp + c)
 
-    fun = bc.transform.StatefulFunForJaxpr(func4)
-    jaxpr = jax.make_jaxpr(fun)((jnp.zeros(8), jnp.ones(8)))
+    fun = bc.transform.StatefulFunction(func4)
+    jaxpr = fun.make_jaxpr((jnp.zeros(8), jnp.ones(8)))
     print(jaxpr)
-    print(fun.states())
+    print(fun.get_states())
 
-  def test_FunWrapperForStateJaxpr_2(self):
+  def test_StatefulFunction_2(self):
     st1 = bc.State(jnp.ones(10))
 
     def f1(x):
       st1.value = x + st1.value
 
     def f2(x):
-      jaxpr = bc.transform.make_jaxpr(bc.transform.StatefulFunForJaxpr(f1))(x)
+      jaxpr = bc.transform.make_jaxpr(f1)(x)
       c = 1. + x
       return c
 
     def f3(x):
-      jaxpr = bc.transform.make_jaxpr(bc.transform.StatefulFunForJaxpr(f1))(x)
+      jaxpr = bc.transform.make_jaxpr(f1)(x)
       c = 1.
       return c
 
     print()
-    jaxpr = jax.make_jaxpr(bc.transform.StatefulFunForJaxpr(f1))(jnp.zeros(1))
+    jaxpr = bc.transform.make_jaxpr(f1)(jnp.zeros(1))
     print(jaxpr)
     jaxpr = jax.make_jaxpr(f2)(jnp.zeros(1))
     print(jaxpr)
     jaxpr = jax.make_jaxpr(f3)(jnp.zeros(1))
     print(jaxpr)
-    jaxpr = jax.make_jaxpr(bc.transform.StatefulFunForJaxpr(f3))(jnp.zeros(1))
+    jaxpr, _ = bc.transform.make_jaxpr(f3)(jnp.zeros(1))
     print(jaxpr)
     self.assertTrue(jnp.allclose(jax.core.jaxpr_as_fun(jaxpr)(jnp.zeros(1), st1.value)[0],
                                  f3(jnp.zeros(1))))

@@ -10,9 +10,10 @@ return the shape, dtype, and named shape of the output of the function.
 import functools
 import operator
 from collections.abc import Hashable, Iterable, Sequence
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Tuple, Union, Dict
 
 import jax
+from jax._src import source_info_util
 from jax.interpreters import partial_eval as pe
 from jax.util import wraps
 
@@ -20,7 +21,7 @@ from braincore._state import State, StateTrace
 
 PyTree = Any
 
-__all__ = ["StatefulFunForJaxpr", "make_jaxpr", ]
+__all__ = ["StatefulFunction", "make_jaxpr", ]
 
 
 def _assign_states(states, state_vals):
@@ -38,7 +39,16 @@ def _ensure_index_tuple(x: Any) -> tuple[int, ...]:
     return tuple(jax.util.safe_map(operator.index, x))
 
 
-class StatefulFunForJaxpr(object):
+# modified from jax.interpreters.partial_eval.DynamicJaxprTrace.new_arg()
+def _new_arg(frame, trace, aval):
+  tracer = pe.DynamicJaxprTracer(trace, aval, source_info_util.current())
+  frame.tracers.append(tracer)
+  frame.tracer_to_var[id(tracer)] = var = frame.newvar(aval)
+  frame.invars.append(var)
+  return tracer
+
+
+class StatefulFunction(object):
   """
   A wrapper class for a function that collects the states that are read and written by the function. The states are
   collected by the function and returned as a StateManager instance. The StateManager instance can be used to
@@ -47,7 +57,6 @@ class StatefulFunForJaxpr(object):
   a StateManager instance that contains the states that are read and written by the function. The class provides
   a function called `__call__` that wraps the function and returns the states that are read and written by the
   function and the output of the function.
-
 
   Args:
     fun: The function whose ``jaxpr`` is to be computed. Its positional
@@ -67,6 +76,15 @@ class StatefulFunForJaxpr(object):
         the corresponding axis is abstracted, and the dict specifies the axis name
         and size. The abstracted axes are used to infer the input type of the
         function. If None, then all axes are abstracted.
+    state_returns: Optional, a string or a tuple of strings. The default is
+        ``('read', 'write')``. The strings specify the categories of states to be
+        returned by the wrapped function. The categories are ``'read'`` and
+        ``'write'``. If the category is ``'read'``, then the wrapped function
+        returns the states that are read by the function. If the category is
+        ``'write'``, then the wrapped function returns the states that are written
+        by the function. If the category is ``'read'`` and ``'write'``, then the
+        wrapped function returns both the read and write states.
+
   """
 
   def __init__(
@@ -77,80 +95,150 @@ class StatefulFunForJaxpr(object):
       abstracted_axes: Any | None = None,
       state_returns: Union[str, Tuple[str, ...]] = ('read', 'write')
   ):
+    # explicit parameters
     self.fun = fun
-    self._static_argnums = _ensure_index_tuple(tuple() if static_argnums is None else static_argnums)
-    self._static_args_last = ()
-    self._axis_env = axis_env
-    self._abstracted_axes = abstracted_axes
-    self._jaxpr: jax.core.ClosedJaxpr = None
-    self._out_shapes: PyTree = None
-    self._jaxpr_out_tree = None
-    self._trace: StateTrace = StateTrace()
+    self.static_argnums = _ensure_index_tuple(tuple() if static_argnums is None else static_argnums)
+    self.axis_env = axis_env
+    self.abstracted_axes = abstracted_axes
     self.state_returns = tuple(state_returns) if isinstance(state_returns, (tuple, list)) else (state_returns,)
+
+    # implicit parameters
+    self._jaxpr: Dict[Any, jax.core.ClosedJaxpr] = dict()
+    self._out_shapes: Dict[Any, PyTree] = dict()
+    self._jaxpr_out_tree: Dict[Any, PyTree] = dict()
+    self._state_trace: Dict[Any, StateTrace] = dict()
 
   def __repr__(self) -> str:
     return (f"{self.__class__.__name__}({self.fun}, "
-            f"static_argnums={self._static_argnums}, "
-            f"axis_env={self._axis_env}, "
-            f"abstracted_axes={self._abstracted_axes})")
+            f"static_argnums={self.static_argnums}, "
+            f"axis_env={self.axis_env}, "
+            f"abstracted_axes={self.abstracted_axes}, "
+            f"state_returns={self.state_returns})")
 
-  @property
-  def jaxpr(self):
-    if self._jaxpr is None:
-      raise ValueError(f"before accessing the jaxpr, please call "
-                       f"'{StatefulFunForJaxpr.__name__}.make_jaxpr()' function.")
-    return self._jaxpr
+  def _check_static_args(self, static_args: tuple):
+    assert len(static_args) == len(self.static_argnums), 'Static arguments length mismatch.'
 
-  @property
-  def out_shapes(self):
-    if self._out_shapes is None:
-      raise ValueError(f"before accessing the output shapes, please call "
-                       f"'{StatefulFunForJaxpr.__name__}.make_jaxpr()' function.")
-    return self._out_shapes
+  def get_jaxpr(self, *static_args) -> jax.core.ClosedJaxpr:
+    """
+    Read the JAX Jaxpr representation of the function.
 
-  @property
-  def out_treedef(self):
-    if self._jaxpr_out_tree is None:
-      raise ValueError(f"before accessing the output tree, please call "
-                       f"'{StatefulFunForJaxpr.__name__}.make_jaxpr()' function.")
-    return self._jaxpr_out_tree
+    Args:
+      static_args: The static arguments to the function.
 
-  @property
-  def states_to_read(self):
-    return tuple([st for st, ty in zip(self._trace.states, self._trace.types) if ty == 'read'])
+    Returns:
+      The JAX Jaxpr representation of the function.
+    """
+    self._check_static_args(static_args)
+    if static_args not in self._jaxpr:
+      raise ValueError(f"the function is not called with the static arguments: {static_args}")
+    return self._jaxpr[static_args]
 
-  @property
-  def states_to_write(self):
-    return tuple([st for st, ty in zip(self._trace.states, self._trace.types) if ty == 'write'])
+  def get_out_shapes(self, *static_args) -> PyTree:
+    """
+    Read the output shapes of the function.
 
-  @property
-  def states(self):
-    return tuple(self._trace.states)
+    Args:
+      *static_args: The static arguments to the function.
 
-  @property
-  def state_values(self):
-    return self._trace.collect_values('read', 'write')
+    Returns:
+      The output shapes of the function.
+    """
+    self._check_static_args(static_args)
+    if static_args not in self._out_shapes:
+      raise ValueError(f"the function is not called with the static arguments: {static_args}")
+    return self._out_shapes[static_args]
 
-  def compile_and_get_states_by_static_args(self, static_args, *args, **kwargs):
+  def get_out_treedef(self, *static_args) -> PyTree:
+    """
+    Read the output tree of the function.
+
+    Args:
+      *static_args: The static arguments to the function.
+
+    Returns:
+      The output tree of the function.
+    """
+    self._check_static_args(static_args)
+    if static_args not in self._jaxpr_out_tree:
+      raise ValueError(f"the function is not called with the static arguments: {static_args}")
+    return self._jaxpr_out_tree[static_args]
+
+  def get_states(self, *static_args) -> Tuple[State, ...]:
+    """
+    Read the states that are read and written by the function.
+
+    Args:
+      *static_args: The static arguments to the function.
+
+    Returns:
+      The states that are read and written by the function.
+    """
+    self._check_static_args(static_args)
+    if static_args not in self._state_trace:
+      raise ValueError(f"the function is not called with the static arguments: {static_args}")
+    return tuple(self._state_trace[static_args].states)
+
+  def get_read_states(self, *static_args) -> Tuple[State, ...]:
+    """
+    Read the states that are read by the function.
+
+    Args:
+      *static_args: The static arguments to the function.
+
+    Returns:
+      The states that are read by the function.
+    """
+    _state_trace = self._state_trace[static_args]
+    return tuple([st for st, ty in zip(_state_trace.states, _state_trace.types) if ty == 'read'])
+
+  def get_write_states(self, *static_args) -> Tuple[State, ...]:
+    """
+    Read the states that are written by the function.
+
+    Args:
+      *static_args: The static arguments to the function.
+
+    Returns:
+      The states that are written by the function.
+    """
+    state_trace = self._state_trace[static_args]
+    return tuple([st for st, ty in zip(state_trace.states, state_trace.types) if ty == 'write'])
+
+  def get_static_args(self, *args):
+    """
+    Get the static arguments from the arguments.
+
+    Args:
+      *args: The arguments to the function.
+
+    Returns:
+      The static arguments.
+    """
+    return tuple(args[i] for i in self.static_argnums)
+
+  def compile_and_get_states_by_static_args(self, *args, **kwargs) -> Tuple[State, ...]:
     """
     Get the states that are read and written by the function.
 
     Args:
-      static_args: The static arguments to the function.
       *args: The arguments to the function.
       **kwargs: The keyword arguments to the function.
 
     Returns:
       The states that are read and written by the function.
     """
-    pass
+    static_args = self.get_static_args(*args)
+    if static_args not in self._state_trace:
+      self.make_jaxpr(*args, **kwargs)
+    return self.get_states(*static_args)
 
-  def _init_trace_and_newarg(self) -> None:
-    self._trace: StateTrace = StateTrace()
+  def _init_trace_and_newarg(self) -> StateTrace:
+    state_trace: StateTrace = StateTrace()
     main = jax.core.thread_local_state.trace_state.trace_stack.stack[-1]
     frame = main.jaxpr_stack[-1]
     trace = pe.DynamicJaxprTrace(main, jax.core.cur_sublevel())
-    self._trace.set_new_arg(functools.partial(_new_arg, frame, trace))
+    state_trace.set_new_arg(functools.partial(_new_arg, frame, trace))
+    return state_trace
 
   def _wrapped_fun_to_eval(self, *args, **kwargs) -> Tuple[Any, Tuple[State, ...]]:
     """
@@ -163,44 +251,52 @@ class StatefulFunForJaxpr(object):
     Returns:
       A tuple of the states that are read and written by the function and the output of the function.
     """
-    self._init_trace_and_newarg()
-    with self._trace:
+    static_args = self.get_static_args(*args)
+    # state trace
+    _state_trace = self._init_trace_and_newarg()
+    self._state_trace[static_args] = _state_trace
+    with _state_trace:
       out = self.fun(*args, **kwargs)
-      state_values = self._trace.collect_values('read', 'write')
-    self._trace.recovery_original_values()
+      state_values = _state_trace.collect_values('read', 'write')
+    _state_trace.recovery_original_values()
     return out, state_values
 
   def make_jaxpr(self, *args, **kwargs):
     """Creates a function that produces its jaxpr given example args.
 
+    A ``ClosedJaxpr`` representation of ``fun`` on those arguments. If the
+    argument ``return_shape`` is ``True``, then the returned function instead
+    returns a pair where the first element is the ``ClosedJaxpr``
+    representation of ``fun`` and the second element is a pytree representing
+    the structure, shape, dtypes, and named shapes of the output of ``fun``.
+
     Args:
       *args: The arguments to the function.
       **kwargs: The keyword arguments to the function.
-
-    Returns:
-      A ``ClosedJaxpr`` representation of ``fun`` on those arguments. If the
-      argument ``return_shape`` is ``True``, then the returned function instead
-      returns a pair where the first element is the ``ClosedJaxpr``
-      representation of ``fun`` and the second element is a pytree representing
-      the structure, shape, dtypes, and named shapes of the output of ``fun``.
-
     """
-    # parameters
-    if self._static_argnums:
-      dyn_argnums = [i for i in range(len(args)) if i not in self._static_argnums]
-      self._static_args_last = tuple(args[i] for i in range(len(args)) if i in dyn_argnums)
 
-    # jaxpr
-    jaxpr, (out_shapes, state_shapes) = jax.make_jaxpr(self._wrapped_fun_to_eval,
-                                                       static_argnums=self._static_argnums,
-                                                       axis_env=self._axis_env,
-                                                       return_shape=True,
-                                                       abstracted_axes=self._abstracted_axes)(*args, **kwargs)
+    # static args
+    static_args = self.get_static_args(*args)
 
-    # returns
-    self._jaxpr_out_tree = jax.tree.structure((out_shapes, state_shapes))
-    self._out_shapes = out_shapes
-    self._jaxpr = jaxpr
+    if static_args not in self._state_trace:
+      try:
+        # jaxpr
+        jaxpr, (out_shapes, state_shapes) = jax.make_jaxpr(
+          self._wrapped_fun_to_eval,
+          static_argnums=self.static_argnums,
+          axis_env=self.axis_env,
+          return_shape=True,
+          abstracted_axes=self.abstracted_axes
+        )(*args, **kwargs)
+
+        # returns
+        self._jaxpr_out_tree[static_args] = jax.tree.structure((out_shapes, state_shapes))
+        self._out_shapes[static_args] = out_shapes
+        self._jaxpr[static_args] = jaxpr
+      except Exception as e:
+        self._state_trace.pop(static_args)
+        raise e
+
     return self
 
   def jaxpr_call(self, state_vals, *args, **kwargs) -> Any:
@@ -208,25 +304,30 @@ class StatefulFunForJaxpr(object):
     Call the function at the JAX Jaxpr level.
 
     Args:
+      state_vals: The state values.
       *args: The arguments to the function.
       **kwargs: The keyword arguments to the function.
 
     Returns:
       State values and the function output.
     """
+    # state checking
+    _static_args = self.get_static_args(*args)
+    states = self.get_states(*_static_args)
+    assert len(state_vals) == len(states), 'State length mismatch.'
+
     # parameters
-    _static_args_last = ()
-    if self._static_argnums:
-      _static_args_last = tuple(args[i] for i in range(len(args)) if i in self._static_argnums)
-      args = tuple(args[i] for i in range(len(args)) if i not in self._static_argnums)
-    if self._static_args_last != _static_args_last:
-      raise ValueError(f"the function is called with different static arguments. "
-                       f"Expected: {self._static_args_last}, got: {_static_args_last}")
+    args = tuple(args[i] for i in range(len(args)) if i not in self.static_argnums)
     args = jax.tree.flatten((args, kwargs, state_vals))[0]
+
     # calling the function
-    jaxpr_outs = jax.core.eval_jaxpr(self.jaxpr.jaxpr, self.jaxpr.consts, *args)
-    out, new_state_vals = self.out_treedef.unflatten(jaxpr_outs)
-    assert len(new_state_vals) == len(state_vals)
+    closed_jaxpr = self.get_jaxpr(*_static_args)
+    out_treedef = self.get_out_treedef(*_static_args)
+    jaxpr_outs = jax.core.eval_jaxpr(closed_jaxpr.jaxpr, closed_jaxpr.consts, *args)
+
+    # output processing
+    out, new_state_vals = out_treedef.unflatten(jaxpr_outs)
+    assert len(new_state_vals) == len(state_vals), 'State length mismatch.'
     return new_state_vals, out
 
   def jaxpr_call_without_states(self, *args, **kwargs) -> Any:
@@ -240,8 +341,10 @@ class StatefulFunForJaxpr(object):
     Returns:
       The output of the function.
     """
-    state_vals, out = self.jaxpr_call([st.value for st in self.states], *args, **kwargs)
-    for st, val in zip(self.states, state_vals):
+    _static_args = self.get_static_args(*args)
+    states = self.get_states(*_static_args)
+    state_vals, out = self.jaxpr_call([st.value for st in states], *args, **kwargs)
+    for st, val in zip(states, state_vals):
       st.value = val
     return out
 
@@ -331,15 +434,19 @@ def make_jaxpr(
     in (g,) }
   """
 
-  stateful_fun = StatefulFunForJaxpr(fun, static_argnums, axis_env, abstracted_axes, state_returns)
+  stateful_fun = StatefulFunction(fun, static_argnums, axis_env, abstracted_axes, state_returns)
 
   @wraps(fun)
   def make_jaxpr_f(*args, **kwargs):
     stateful_fun.make_jaxpr(*args, **kwargs)
+    static_args = tuple(args[i] for i in stateful_fun.static_argnums)
     if return_shape:
-      return stateful_fun.jaxpr, stateful_fun.states, stateful_fun.out_shapes
+      return (stateful_fun.get_jaxpr(*static_args),
+              stateful_fun.get_states(*static_args),
+              stateful_fun.get_out_shapes(*static_args))
     else:
-      return stateful_fun.jaxpr, stateful_fun.states
+      return (stateful_fun.get_jaxpr(*static_args),
+              stateful_fun.get_states(*static_args))
 
   # wrapped jaxpr builder function
   make_jaxpr_f.__module__ = "braincore.transform"
