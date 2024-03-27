@@ -13,7 +13,18 @@
 </p>
 
 
-[``braincore``](https://github.com/brainpy/braincore) is the core system for general-purpose brain dynamics programming framework [``BrainPy``](https://github.com/brainpy/BrainPy). 
+[``braincore``](https://github.com/brainpy/braincore) implements the core system for the next generation brain dynamics programming framework [``BrainPy``](https://github.com/brainpy/BrainPy). 
+
+Compared to BrainPy 2.0, ``braincore`` provides a range of distinctive features that facilitate precise, convenient, and high-performance modeling of large-scale brain dynamics. These notable features encompass:
+
+1. Robust program transformations built upon a straightforward and intuitive ``State`` system, enabling powerful computations.
+2. Integration of physical units, ensuring seamless compatibility with brain science data and enhancing the accuracy of simulations.
+3. Utilization of advanced and precise numerical differential equation solvers, enabling accurate representation of complex brain dynamics.
+4. Support for parallelization across multiple devices, facilitating efficient computation and enabling scalability for large-scale simulations.
+
+By leveraging these unique capabilities, braincore empowers researchers and scientists to conduct comprehensive and accurate analyses of brain dynamics on a larger scale, fostering advancements in the understanding of the intricate workings of the brain.
+
+
 
 
 ## Installation
@@ -23,6 +34,8 @@ You can install ``braincore`` via pip:
 ```bash
 pip install braincore --upgrade
 ```
+
+
 
 ## Documentation
 
