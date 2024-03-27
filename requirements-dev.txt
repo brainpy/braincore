@@ -5,3 +5,4 @@ jaxlib
 # test requirements
 pytest
 absl-py
+sympy
