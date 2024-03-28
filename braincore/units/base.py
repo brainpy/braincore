@@ -13,7 +13,7 @@ from jax.tree_util import register_pytree_node_class
 from braincore.environ import dftype
 
 __all__ = [
-  'Array',
+  'Quantity',
   'Unit',
   'UnitRegistry',
   'DimensionMismatchError',
@@ -34,26 +34,26 @@ unit_checking = True
 
 
 def _as_jax_array_(obj):
-  return obj.value if isinstance(obj, Array) else obj
+  return obj.value if isinstance(obj, Quantity) else obj
 
 
 def _check_input_array(array):
-  if isinstance(array, Array):
+  if isinstance(array, Quantity):
     return array
-  elif isinstance(array, np.ndarray):
-    return Array(value=jnp.asarray(array))
+  elif isinstance(array, (numbers.Number, jax.Array, np.number, np.ndarray, list, tuple)):
+    return Quantity(value=jnp.asarray(array))
   else:
-    return array
+    raise ValueError('Input array should be an instance of Array.')
 
 
 def _check_input_not_array(array):
-  if isinstance(array, Array):
+  if isinstance(array, Quantity):
     raise ValueError('Input array should not be an instance of Array.')
   return array
 
 
 def _check_out(out):
-  if not isinstance(out, Array):
+  if not isinstance(out, Quantity):
     raise TypeError(f'out must be an instance of brainpy Array. But got {type(out)}')
 
 
@@ -492,7 +492,7 @@ def get_dimensions(obj):
     if isinstance(obj, (numbers.Number, jax.Array, np.number, np.ndarray)):
       return DIMENSIONLESS
     try:
-      return Array(obj).unit
+      return Quantity(obj).unit
     except TypeError:
       raise TypeError(f"Object of type {type(obj)} does not have dimensions")
 
@@ -607,28 +607,6 @@ def fail_for_dimension_mismatch(
   else:
     return dim1, dim2
 
-
-def get_unit(obj):
-  """
-  Return the unit dimensions of the object.
-
-  Parameters
-  ----------
-  obj : `object`
-      The object to get the unit dimensions from.
-
-  Returns
-  -------
-  dim : `Dimension`
-      The unit dimensions of the object.
-  """
-
-  if isinstance(obj, Array):
-    return obj.unit
-  else:
-    return DIMENSIONLESS
-
-
 def in_unit(x, u, precision=None):
   """
   Display a value in a certain unit with a given precision.
@@ -738,7 +716,7 @@ def array_with_units(floatval, units: Dimension, dtype=None):
 
   Returns
   -------
-  array : `Array`
+  array : `Quantity`
       The new `Array` object.
 
   Examples
@@ -747,7 +725,7 @@ def array_with_units(floatval, units: Dimension, dtype=None):
   >>> array_with_units(0.001, volt.unit)
   1. * mvolt
   """
-  return Array(floatval, unit=get_or_create_dimension(units._dims), dtype=dtype)
+  return Quantity(floatval, unit=get_or_create_dimension(units._dims), dtype=dtype)
 
 
 def is_dimensionless(obj):
@@ -927,8 +905,8 @@ def wrap_function_keep_dimensions(func):
   ``sum`` to work as expected with additional ``axis`` etc. arguments.
   """
 
-  def f(x: Array, *args, **kwds):  # pylint: disable=C0111
-    return Array(func(x.value, *args, **kwds), unit=x.unit)
+  def f(x, *args, **kwds):  # pylint: disable=C0111
+    return Quantity(func(x.value, *args, **kwds), unit=x.unit)
 
   f._arg_units = [None]
   f._return_unit = lambda u: u
@@ -951,8 +929,8 @@ def wrap_function_change_dimensions(func, change_dim_func):
   other arguments are ignored/untouched.
   """
 
-  def f(x: Array, *args, **kwds):  # pylint: disable=C0111
-    return Array(func(x.value, *args, **kwds), unit=change_dim_func(x.value, x.unit))
+  def f(x, *args, **kwds):  # pylint: disable=C0111
+    return Quantity(func(x.value, *args, **kwds), unit=change_dim_func(x.value, x.unit))
 
   f._arg_units = [None]
   f._return_unit = change_dim_func
@@ -973,7 +951,7 @@ def wrap_function_remove_dimensions(func):
   other arguments are ignored/untouched.
   """
 
-  def f(x: Array, *args, **kwds):  # pylint: disable=C0111
+  def f(x, *args, **kwds):  # pylint: disable=C0111
     return func(x.value, *args, **kwds)
 
   f._arg_units = [None]
@@ -984,8 +962,15 @@ def wrap_function_remove_dimensions(func):
   return f
 
 
+def can_convert_to_dtype(elements, dtype):
+  try:
+    [dtype(element) for element in elements]
+    return True
+  except ValueError:
+    return False
+
 @register_pytree_node_class
-class Array(object):
+class Quantity(object):
   """
 
   """
@@ -999,7 +984,7 @@ class Array(object):
     dtype = dtype or dftype()
 
     # array value
-    if isinstance(value, Array):
+    if isinstance(value, Quantity):
       self._unit = value.unit
       self._value = jnp.array(value.value, dtype=dtype)
       return
@@ -1021,7 +1006,10 @@ class Array(object):
           del units
         del has_units
         # Transform to jnp array
-        value = jnp.array(value, dtype=dtype)
+        try:
+          value = jnp.array(value, dtype=dtype)
+        except ValueError:
+          raise TypeError("All elements must be convertible to a jax array")
 
     elif isinstance(value, (np.ndarray, jax.Array)):
       value = jnp.asarray(value, dtype=dtype)
@@ -1059,7 +1047,7 @@ class Array(object):
 
     """
     self_value = self._check_tracer()
-    if isinstance(value, Array):
+    if isinstance(value, Quantity):
       raise ValueError("Cannot set the value of an Array object to another Array object.")
       # if self.unit != value.unit:
       #   raise ValueError(f"The unit of the original data is {self.unit}, "
@@ -1093,6 +1081,133 @@ class Array(object):
 
   ### UNITS ###
 
+  def __array_ufunc__(self, uf, method, *inputs, **kwargs):
+    if method not in ("__call__", "reduce"):
+      return NotImplemented
+    uf_method = getattr(uf, method)
+    if "out" in kwargs:
+      # In contrast to numpy, we will not change a scalar value in-place,
+      # i.e. a scalar Quantity will act like a Python float and not like
+      # a numpy scalar in that regard.
+      if self.ndim == 0:
+        del kwargs["out"]
+      else:
+        # The output needs to be an array to avoid infinite recursion
+        # Note that it is also part of the input arguments, so we don't
+        # need to check its dimensions
+        assert len(kwargs["out"]) == 1
+        kwargs["out"] = (jnp.asarray(kwargs["out"][0]),)
+    if uf.__name__ in (UFUNCS_LOGICAL + ["sign", "ones_like"]):
+      # do not touch return value
+      return uf_method(*[jnp.asarray(a) for a in inputs], **kwargs)
+    elif uf.__name__ in UFUNCS_PRESERVE_DIMENSIONS:
+      return Quantity(
+        uf_method(*[np.asarray(a) for a in inputs], **kwargs),
+        unit=self.unit,
+      )
+    elif uf.__name__ in UFUNCS_CHANGE_DIMENSIONS + ["power"]:
+      if uf.__name__ == "sqrt":
+        unit = self.unit ** 0.5
+      elif uf.__name__ == "power":
+        fail_for_dimension_mismatch(
+          inputs[1],
+          error_message=(
+            "The exponent for a "
+            "power operation has to "
+            "be dimensionless but "
+            "was {value}"
+          ),
+          value=inputs[1],
+        )
+        if np.asarray(inputs[1]).size != 1:
+          raise TypeError(
+            "Only length-1 arrays can be used as an exponent for"
+            " quantities."
+          )
+        unit = get_dimensions(inputs[0]) ** np.asarray(inputs[1])
+      elif uf.__name__ == "square":
+        unit = self.unit ** 2
+      elif uf.__name__ in ("divide", "true_divide", "floor_divide"):
+        unit = get_dimensions(inputs[0]) / get_dimensions(inputs[1])
+      elif uf.__name__ == "reciprocal":
+        unit = get_dimensions(inputs[0]) ** -1
+      elif uf.__name__ in ("multiply", "dot", "matmul"):
+        if method == "__call__":
+          unit = get_dimensions(inputs[0]) * get_dimensions(inputs[1])
+        else:
+          unit = get_dimensions(inputs[0])
+      else:
+        return NotImplemented
+      return Quantity(
+        uf_method(*[np.asarray(a) for a in inputs], **kwargs), unit=unit
+      )
+    elif uf.__name__ in UFUNCS_INTEGERS:
+      # Numpy should already raise a TypeError by itself
+      raise TypeError(f"{uf.__name__} cannot be used on quantities.")
+    elif uf.__name__ in UFUNCS_MATCHING_DIMENSIONS + UFUNCS_COMPARISONS:
+      # Ok if dimension of arguments match (for reductions, they always do)
+      if method == "__call__":
+        fail_for_dimension_mismatch(
+          inputs[0],
+          inputs[1],
+          error_message=(
+                          "Cannot calculate {val1} %s {val2}, the units do not match"
+                        )
+                        % uf.__name__,
+          val1=inputs[0],
+          val2=inputs[1],
+        )
+      if uf.__name__ in UFUNCS_COMPARISONS:
+        return uf_method(*[np.asarray(i) for i in inputs], **kwargs)
+      else:
+        return Quantity(
+          uf_method(*[np.asarray(i) for i in inputs], **kwargs),
+          unit=self.unit,
+        )
+    elif uf.__name__ in UFUNCS_DIMENSIONLESS:
+      # Ok if argument is dimensionless
+      fail_for_dimension_mismatch(
+        inputs[0],
+        error_message="%s expects a dimensionless argument but got {value}"
+                      % uf.__name__,
+        value=inputs[0],
+      )
+      return uf_method(np.asarray(inputs[0]), *inputs[1:], **kwargs)
+    elif uf.__name__ in UFUNCS_DIMENSIONLESS_TWOARGS:
+      # Ok if both arguments are dimensionless
+      fail_for_dimension_mismatch(
+        inputs[0],
+        error_message=(
+                        "Both arguments for "
+                        '"%s" should be '
+                        "dimensionless but "
+                        "first argument was "
+                        "{value}"
+                      )
+                      % uf.__name__,
+        value=inputs[0],
+      )
+      fail_for_dimension_mismatch(
+        inputs[1],
+        error_message=(
+                        "Both arguments for "
+                        '"%s" should be '
+                        "dimensionless but "
+                        "second argument was "
+                        "{value}"
+                      )
+                      % uf.__name__,
+        value=inputs[1],
+      )
+      return uf_method(
+        np.asarray(inputs[0]),
+        np.asarray(inputs[1]),
+        *inputs[2:],
+        **kwargs,
+      )
+    else:
+      return NotImplemented
+
   @staticmethod
   def with_units(value, *args, **keywords):
     """
@@ -1109,7 +1224,7 @@ class Array(object):
 
     Returns
     -------
-    q : `Array`
+    q : `Quantity`
         A `Array` object with the given dim
 
     Examples
@@ -1117,9 +1232,9 @@ class Array(object):
     All of these define an equivalent `Array` object:
 
     >>> from braincore.units import *
-    >>> Array.with_units(2, get_or_create_dimension(length=1))
+    >>> Quantity.with_units(2, get_or_create_dimension(length=1))
     2. * metre
-    >>> Array.with_units(2, length=1)
+    >>> Quantity.with_units(2, length=1)
     2. * metre
     >>> 2 * metre
     2. * metre
@@ -1128,7 +1243,7 @@ class Array(object):
       dimensions = args[0]
     else:
       dimensions = get_or_create_dimension(*args, **keywords)
-    return Array(value, unit=dimensions)
+    return Quantity(value, unit=dimensions)
 
   is_dimensionless = property(lambda self: self.unit.is_dimensionless,
                               doc="Whether the array is dimensionless")
@@ -1139,7 +1254,7 @@ class Array(object):
 
     Parameters
     ----------
-    other : Array
+    other : Quantity
         The other Array to compare with
 
     Returns
@@ -1156,7 +1271,7 @@ class Array(object):
 
     Parameters
     ----------
-    u : `Array`
+    u : `Quantity`
         The unit in which to show the ar.
     precision : `int`, optional
         The number of digits of precision (in the given unit)
@@ -1228,7 +1343,7 @@ class Array(object):
 
     Returns
     -------
-    u : `Array` or `Unit`
+    u : `Quantity` or `Unit`
         The best unit for this `Array`.
     """
     if self.is_dimensionless:
@@ -1239,7 +1354,7 @@ class Array(object):
           return r[self]
         except KeyError:
           pass
-      return Array(1, unit=self.unit)
+      return Quantity(1, unit=self.unit)
     else:
       return self.get_best_unit(standard_unit_register, user_unit_register, additional_unit_register)
 
@@ -1304,11 +1419,11 @@ class Array(object):
 
   @property
   def imag(self):
-    return Array(self.value.image, unit=self.unit)
+    return Quantity(self.value.image, unit=self.unit)
 
   @property
   def real(self):
-    return Array(self.value.real, unit=self.unit)
+    return Quantity(self.value.real, unit=self.unit)
 
   @property
   def size(self):
@@ -1316,7 +1431,7 @@ class Array(object):
 
   @property
   def T(self):
-    return Array(self.value.T, unit=self.unit)
+    return Quantity(self.value.T, unit=self.unit)
 
   # ----------------------- #
   # Python inherent methods #
@@ -1345,25 +1460,26 @@ class Array(object):
     - https://github.com/google/jax/pull/3821
     """
     for i in range(self.value.shape[0]):
-      yield Array(self.value[i], unit=self.unit)
+      yield Quantity(self.value[i], unit=self.unit)
 
   def __getitem__(self, index):
     if isinstance(index, slice) and (index == _all_slice):
-      return Array(self.value, unit=self.unit)
+      return Quantity(self.value, unit=self.unit)
     elif isinstance(index, tuple):
       for x in index:
-        assert not isinstance(x, Array), "Array indices must be integers or slices, not Array"
-    elif isinstance(index, Array):
+        assert not isinstance(x, Quantity), "Array indices must be integers or slices, not Array"
+    elif isinstance(index, Quantity):
       raise TypeError("Array indices must be integers or slices, not Array")
-    return Array(self.value[index], unit=self.unit)
+    return Quantity(self.value[index], unit=self.unit)
 
-  def __setitem__(self, index, value: 'Array'):
-    assert isinstance(value, Array), "Only Array can be assigned to Array."
+  def __setitem__(self, index, value: 'Quantity'):
+    if not isinstance(value, Quantity):
+      raise DimensionMismatchError("Only Array can be assigned to Array.")
     fail_for_dimension_mismatch(self, value, "Inconsistent units in assignment")
     value = value.value
 
     # index is a tuple
-    assert not isinstance(index, Array), "Array indices must be integers or slices, not Array"
+    assert not isinstance(index, Quantity), "Array indices must be integers or slices, not Array"
     if isinstance(index, tuple):
       index = tuple(_check_input_not_array(x) for x in index)
     # index is numpy.ndarray
@@ -1382,22 +1498,22 @@ class Array(object):
     return len(self.value)
 
   def __neg__(self):
-    return Array(self.value.__neg__(), unit=self.unit)
+    return Quantity(self.value.__neg__(), unit=self.unit)
 
   def __pos__(self):
-    return Array(self.value.__pos__(), unit=self.unit)
+    return Quantity(self.value.__pos__(), unit=self.unit)
 
   def __abs__(self):
-    return Array(self.value.__abs__(), unit=self.unit)
+    return Quantity(self.value.__abs__(), unit=self.unit)
 
   def __invert__(self):
-    return Array(self.value.__invert__(), unit=self.unit)
+    return Quantity(self.value.__invert__(), unit=self.unit)
 
   def _comparison(self, other, operator_str, operation):
     is_scalar = is_scalar_type(other)
-    if not is_scalar and not isinstance(other, (jax.Array, Array, np.ndarray)):
+    if not is_scalar and not isinstance(other, (jax.Array, Quantity, np.ndarray)):
       return NotImplemented
-    if isinstance(other, Array):
+    if isinstance(other, Quantity):
       message = "Cannot perform comparison {value1} %s {value2}, units do not match" % operator_str
       fail_for_dimension_mismatch(self, other, message, value1=self, value2=other)
     other = _check_input_array(other)
@@ -1470,7 +1586,7 @@ class Array(object):
 
     newdims = unit_operation(self.unit, other_unit)
     result = value_operation(self.value, other.value)
-    r = Array(result, unit=newdims)
+    r = Quantity(result, unit=newdims)
     if inplace:
       self.value = r.value
       return self
@@ -1490,7 +1606,7 @@ class Array(object):
     return self._binary_operation(oc, operator.sub, fail_for_mismatch=True, operator_str="-")
 
   def __rsub__(self, oc):
-    return Array(oc).__sub__(self)
+    return Quantity(oc).__sub__(self)
 
   def __isub__(self, oc):
     # a -= b
@@ -1578,9 +1694,9 @@ class Array(object):
         base=self,
         exponent=oc,
       )
-      if isinstance(oc, Array):
+      if isinstance(oc, Quantity):
         oc = oc.value
-      return Array(jnp.array(self.value) ** oc, unit=self.unit ** oc)
+      return Quantity(jnp.array(self.value) ** oc, unit=self.unit ** oc)
     else:
       return NotImplemented('Cannot calculate {base} ** {exponent}, the '
                             'exponent has to be dimensionless'.format(base=self, exponent=oc))
@@ -1588,7 +1704,7 @@ class Array(object):
   def __rpow__(self, oc):
     if self.is_dimensionless:
       if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)):
-        return Array(oc ** self.value, unit=DIMENSIONLESS)
+        return Quantity(oc ** self.value, unit=DIMENSIONLESS)
       else:
         return oc.__pow__(self.value)
     else:
@@ -1640,9 +1756,9 @@ class Array(object):
 
   def __lshift__(self, oc):
     if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)) or is_scalar_type(oc):
-      if isinstance(oc, Array):
+      if isinstance(oc, Quantity):
         oc = oc.value
-      return Array(self.value << oc, unit=self.unit)
+      return Quantity(self.value << oc, unit=self.unit)
     else:
       raise TypeError("Cannot calculate {value} << {shift}, the shift has "
                       "to be dimensionless".format(value=self, shift=oc))
@@ -1650,8 +1766,8 @@ class Array(object):
   def __rlshift__(self, oc):
     if self.is_dimensionless:
       if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)):
-        return Array(oc << self.value, unit=DIMENSIONLESS)
-      elif isinstance(oc, Array):
+        return Quantity(oc << self.value, unit=DIMENSIONLESS)
+      elif isinstance(oc, Quantity):
         return oc.__lshift__(self.value)
       else:
         raise TypeError("Cannot calculate {shift} << {value}, the value has "
@@ -1669,9 +1785,9 @@ class Array(object):
 
   def __rshift__(self, oc):
     if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)) or is_scalar_type(oc):
-      if isinstance(oc, Array):
+      if isinstance(oc, Quantity):
         oc = oc.value
-      return Array(self.value >> oc, unit=self.unit)
+      return Quantity(self.value >> oc, unit=self.unit)
     else:
       raise TypeError("Cannot calculate {value} >> {shift}, the shift has "
                       "to be dimensionless".format(value=self, shift=oc))
@@ -1679,8 +1795,8 @@ class Array(object):
   def __rrshift__(self, oc):
     if self.is_dimensionless:
       if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)):
-        return Array(oc >> self.value, unit=DIMENSIONLESS)
-      elif isinstance(oc, Array):
+        return Quantity(oc >> self.value, unit=DIMENSIONLESS)
+      elif isinstance(oc, Quantity):
         return oc.__rshift__(self.value)
       else:
         raise TypeError("Cannot calculate {shift} >> {value}, the value has "
@@ -1697,7 +1813,7 @@ class Array(object):
     return self
 
   def __round__(self, ndigits=None):
-    return Array(self.value.__round__(ndigits), unit=self.unit)
+    return Quantity(self.value.__round__(ndigits), unit=self.unit)
 
   def __reduce__(self):
     return array_with_units, (self.value, self.unit, self.value.dtype)
@@ -1736,9 +1852,9 @@ class Array(object):
       Typecode or data-type to which the array is cast.
     """
     if dtype is None:
-      return Array(self.value, unit=self.unit)
+      return Quantity(self.value, unit=self.unit)
     else:
-      return Array(self.value.astype(dtype), unit=self.unit)
+      return Quantity(self.value.astype(dtype), unit=self.unit)
 
   def byteswap(self, inplace=False):
     """Swap the bytes of the array elements
@@ -1747,17 +1863,17 @@ class Array(object):
     returning a byteswapped array, optionally swapped in-place.
     Arrays of byte-strings are not swapped. The real and imaginary
     parts of a complex number are swapped individually."""
-    return Array(self.value.byteswap(inplace=inplace), unit=self.unit)
+    return Quantity(self.value.byteswap(inplace=inplace), unit=self.unit)
 
   def choose(self, choices, mode='raise'):
     """Use an index array to construct a new array from a set of choices."""
-    return Array(self.value.choose(choices=_as_jax_array_(choices), mode=mode), unit=self.unit)
+    return Quantity(self.value.choose(choices=_as_jax_array_(choices), mode=mode), unit=self.unit)
 
   def clip(self, min=None, max=None, *args, **kwds):
     """Return an array whose values are limited to [min, max]. One of max or min must be given."""
     fail_for_dimension_mismatch(self, min, "clip")
     fail_for_dimension_mismatch(self, max, "clip")
-    return Array(
+    return Quantity(
       jnp.clip(
         jnp.array(self.value),
         jnp.array(min),
@@ -1778,19 +1894,19 @@ class Array(object):
 
   def compress(self, condition, axis=None):
     """Return selected slices of this array along given axis."""
-    return Array(self.value.compress(condition=_as_jax_array_(condition), axis=axis), unit=self.unit)
+    return Quantity(self.value.compress(condition=_as_jax_array_(condition), axis=axis), unit=self.unit)
 
   def conj(self):
     """Complex-conjugate all elements."""
-    return Array(self.value.conj(), unit=self.unit)
+    return Quantity(self.value.conj(), unit=self.unit)
 
   def conjugate(self):
     """Return the complex conjugate, element-wise."""
-    return Array(self.value.conjugate(), unit=self.unit)
+    return Quantity(self.value.conjugate(), unit=self.unit)
 
   def copy(self):
     """Return a copy of the array."""
-    return Array(self.value.copy(), unit=self.unit)
+    return Quantity(self.value.copy(), unit=self.unit)
 
   def cumprod(self, axis=None, dtype=None):
     """Return the cumulative product of the elements along the given axis."""
@@ -1799,7 +1915,7 @@ class Array(object):
         "cumprod over array elements on arrays "
         "with units is not possible"
       )
-    return Array(self.value.cumprod(axis=axis, dtype=dtype), unit=self.unit)
+    return Quantity(self.value.cumprod(axis=axis, dtype=dtype), unit=self.unit)
 
   def dot(self, b):
     """Dot product of two arrays."""
@@ -1811,11 +1927,11 @@ class Array(object):
     self.value = jnp.ones_like(self.value) * value
 
   def flatten(self):
-    return Array(self.value.flatten(), unit=self.unit)
+    return Quantity(self.value.flatten(), unit=self.unit)
 
   def item(self, *args):
     """Copy an element of an array to a standard Python scalar and return it."""
-    return Array(self.value.item(*args), unit=self.unit)
+    return Quantity(self.value.item(*args), unit=self.unit)
 
   def prod(self, *args, **kwds):
     """Return the product of the array elements over the given axis."""
@@ -1833,7 +1949,7 @@ class Array(object):
     # identical
     if dim_exponent.size > 1:
       dim_exponent = dim_exponent[0]
-    return Array(jnp.array(prod_res), self.dim ** dim_exponent)
+    return Quantity(jnp.array(prod_res), self.dim ** dim_exponent)
 
   def put(self, indices, values):
     """Replaces specified elements of an array with given values.
@@ -1850,11 +1966,11 @@ class Array(object):
 
   def repeat(self, repeats, axis=None):
     """Repeat elements of an array."""
-    return Array(self.value.repeat(repeats=repeats, axis=axis), unit=self.unit)
+    return Quantity(self.value.repeat(repeats=repeats, axis=axis), unit=self.unit)
 
   def reshape(self, *shape, order='C'):
     """Returns an array containing the same data with a new shape."""
-    return Array(self.value.reshape(*shape, order=order), unit=self.unit)
+    return Quantity(self.value.reshape(*shape, order=order), unit=self.unit)
 
   def resize(self, new_shape):
     """Change shape and size of array in-place."""
@@ -1920,11 +2036,11 @@ class Array(object):
 
   def squeeze(self, axis=None):
     """Remove axes of length one from ``a``."""
-    return Array(self.value.squeeze(axis=axis), unit=self.unit)
+    return Quantity(self.value.squeeze(axis=axis), unit=self.unit)
 
   def swapaxes(self, axis1, axis2):
     """Return a view of the array with `axis1` and `axis2` interchanged."""
-    return Array(self.value.swapaxes(axis1, axis2), unit=self.unit)
+    return Quantity(self.value.swapaxes(axis1, axis2), unit=self.unit)
 
   def split(self, indices_or_sections, axis=0):
     """Split an array into multiple sub-arrays as views into ``ary``.
@@ -1954,11 +2070,11 @@ class Array(object):
     sub-arrays : list of ndarrays
       A list of sub-arrays as views into `ary`.
     """
-    return [Array(a, unit=self.unit) for a in jnp.split(self.value, indices_or_sections, axis=axis)]
+    return [Quantity(a, unit=self.unit) for a in jnp.split(self.value, indices_or_sections, axis=axis)]
 
   def take(self, indices, axis=None, mode=None):
     """Return an array formed from the elements of a at the given indices."""
-    return Array(self.value.take(indices=indices, axis=axis, mode=mode), unit=self.unit)
+    return Quantity(self.value.take(indices=indices, axis=axis, mode=mode), unit=self.unit)
 
   def tobytes(self):
     """Construct Python bytes containing the raw data bytes in the array.
@@ -1986,7 +2102,7 @@ class Array(object):
       """
       # No recursion needed for single values
       if not isinstance(seq, list):
-        return Array(seq, unit=unit)
+        return Quantity(seq, unit=unit)
 
       def top_replace(s):
         """
@@ -1994,7 +2110,7 @@ class Array(object):
         """
         for i in s:
           if not isinstance(i, list):
-            yield Array(i, unit=unit)
+            yield Quantity(i, unit=unit)
           else:
             yield type(i)(top_replace(i))
 
@@ -2032,7 +2148,7 @@ class Array(object):
     out : ndarray
         View of `a`, with axes suitably permuted.
     """
-    return Array(self.value.transpose(*axes), unit=self.unit)
+    return Quantity(self.value.transpose(*axes), unit=self.unit)
 
   def tile(self, reps):
     """Construct an array by repeating A the number of times given by reps.
@@ -2063,7 +2179,7 @@ class Array(object):
     c : ndarray
         The tiled output array.
     """
-    return Array(self.value.tile(_as_jax_array_(reps)), unit=self.unit)
+    return Quantity(self.value.tile(_as_jax_array_(reps)), unit=self.unit)
 
   def view(self, *args, dtype=None):
     r"""New view of array with the same data.
@@ -2204,16 +2320,16 @@ class Array(object):
       if dtype is None:
         raise ValueError('Provide dtype or shape.')
       else:
-        return Array(self.value.view(dtype), unit=self.unit)
+        return Quantity(self.value.view(dtype), unit=self.unit)
     else:
       if isinstance(args[0], int):  # shape
         if dtype is not None:
           raise ValueError('Provide one of dtype or shape. Not both.')
-        return Array(self.value.reshape(*args), unit=self.unit)
+        return Quantity(self.value.reshape(*args), unit=self.unit)
       else:  # dtype
         assert not isinstance(args[0], int)
         assert dtype is None
-        return Array(self.value.view(args[0]), unit=self.unit)
+        return Quantity(self.value.view(args[0]), unit=self.unit)
 
   # ------------------
   # NumPy support
@@ -2267,7 +2383,7 @@ class Array(object):
   # PyTorch compatibility
   # ----------------------
 
-  def unsqueeze(self, dim: int) -> 'Array':
+  def unsqueeze(self, dim: int) -> 'Quantity':
     """
     Array.unsqueeze(dim) -> Array, or so called Tensor
     equals
@@ -2275,9 +2391,9 @@ class Array(object):
 
     See :func:`braincore.math.unsqueeze`
     """
-    return Array(jnp.expand_dims(self.value, dim), unit=self.unit)
+    return Quantity(jnp.expand_dims(self.value, dim), unit=self.unit)
 
-  def expand_dims(self, axis: Union[int, Sequence[int]]) -> 'Array':
+  def expand_dims(self, axis: Union[int, Sequence[int]]) -> 'Quantity':
     """
     self.expand_dims(axis: int|Sequence[int])
 
@@ -2307,37 +2423,37 @@ class Array(object):
     self.expand_dims(axis)==self.expand_dims(axis[0]).expand_dims(axis[1])... expand_dims(axis[len(axis)-1])
 
     """
-    return Array(jnp.expand_dims(self.value, axis), unit=self.unit)
+    return Quantity(jnp.expand_dims(self.value, axis), unit=self.unit)
 
-  def expand_as(self, array: Union['Array', jax.Array, np.ndarray]) -> 'Array':
+  def expand_as(self, array: Union['Quantity', jax.Array, np.ndarray]) -> 'Quantity':
     """
     Expand an array to a shape of another array.
 
     Parameters
     ----------
-    array : Array
+    array : Quantity
 
     Returns
     -------
-    expanded : Array
+    expanded : Quantity
         A readonly view on the original array with the given shape of array. It is
         typically not contiguous. Furthermore, more than one element of a
         expanded array may refer to a single memory location.
     """
-    return Array(jnp.broadcast_to(self.value, array), unit=self.unit)
+    return Quantity(jnp.broadcast_to(self.value, array), unit=self.unit)
 
   def pow(self, oc):
     return self.__pow__(oc)
 
   def addr(
       self,
-      vec1: Union['Array', jax.Array, np.ndarray],
-      vec2: Union['Array', jax.Array, np.ndarray],
+      vec1: Union['Quantity', jax.Array, np.ndarray],
+      vec2: Union['Quantity', jax.Array, np.ndarray],
       *,
       beta: float = 1.0,
       alpha: float = 1.0,
-      out: Optional[Union['Array', jax.Array, np.ndarray]] = None
-  ) -> Optional['Array']:
+      out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None
+  ) -> Optional['Quantity']:
     r"""Performs the outer-product of vectors ``vec1`` and ``vec2`` and adds it to the matrix ``input``.
 
     Optional values beta and alpha are scaling factors on the outer product
@@ -2363,7 +2479,7 @@ class Array(object):
     vec2 = _as_jax_array_(vec2)
     r = alpha * jnp.outer(vec1, vec2) + beta * self.value
     if out is None:
-      return Array(r, unit=out_unit)
+      return Quantity(r, unit=out_unit)
     else:
       _check_out(out)
       out.value = r
@@ -2371,8 +2487,8 @@ class Array(object):
 
   def addr_(
       self,
-      vec1: Union['Array', jax.Array, np.ndarray],
-      vec2: Union['Array', jax.Array, np.ndarray],
+      vec1: Union['Quantity', jax.Array, np.ndarray],
+      vec2: Union['Quantity', jax.Array, np.ndarray],
       *,
       beta: float = 1.0,
       alpha: float = 1.0
@@ -2387,14 +2503,14 @@ class Array(object):
       self.unit = DIMENSIONLESS
     return self
 
-  def outer(self, other: Union['Array', jax.Array, np.ndarray]) -> 'Array':
+  def outer(self, other: Union['Quantity', jax.Array, np.ndarray]) -> 'Quantity':
     other = _as_jax_array_(other)
-    return Array(jnp.outer(self.value, other.value), unit=self.unit * other.unit)
+    return Quantity(jnp.outer(self.value, other.value), unit=self.unit * other.unit)
 
-  def abs(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def abs(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     r = jnp.abs(self.value)
     if out is None:
-      return Array(r, unit=self.unit)
+      return Quantity(r, unit=self.unit)
     else:
       _check_out(out)
       out.value = r
@@ -2411,7 +2527,7 @@ class Array(object):
     self.value += value
     return self
 
-  def absolute(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def absolute(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     """
     alias of Array.abs
     """
@@ -2424,16 +2540,16 @@ class Array(object):
     return self.abs_()
 
   def mul(self, value):
-    if isinstance(value, Array):
-      return Array(self.value * value.value, unit=self.unit * value.unit)
+    if isinstance(value, Quantity):
+      return Quantity(self.value * value.value, unit=self.unit * value.unit)
     else:
-      return Array(self.value * value, unit=self.unit)
+      return Quantity(self.value * value, unit=self.unit)
 
   def mul_(self, value):
     """
     In-place version of :meth:`~Array.mul`.
     """
-    if isinstance(value, Array):
+    if isinstance(value, Quantity):
       self.value *= value.value
       self.unit *= value.unit
     else:
@@ -2457,11 +2573,11 @@ class Array(object):
     self.value *= value
     return self
 
-  def sin(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def sin(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.sin(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2482,11 +2598,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take cos of a Array with units.")
 
-  def cos(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def cos(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.cos(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2500,11 +2616,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take tan of a Array with units.")
 
-  def tan(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def tan(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.tan(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2518,11 +2634,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take sinh of a Array with units.")
 
-  def sinh(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def sinh(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.tanh(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2536,11 +2652,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take cosh of a Array with units.")
 
-  def cosh(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def cosh(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.cosh(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2554,11 +2670,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take tanh of a Array with units.")
 
-  def tanh(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def tanh(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.tanh(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2572,11 +2688,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take arcsin of a Array with units.")
 
-  def arcsin(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def arcsin(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.arcsin(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2590,11 +2706,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take arccos of a Array with units.")
 
-  def arccos(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def arccos(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.arccos(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2608,11 +2724,11 @@ class Array(object):
     else:
       raise ValueError("Cannot take arctan of a Array with units.")
 
-  def arctan(self, *, out: Optional[Union['Array', jax.Array, np.ndarray]] = None) -> Optional['Array']:
+  def arctan(self, *, out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None) -> Optional['Quantity']:
     if self.is_dimensionless:
       r = jnp.arctan(self.value)
       if out is None:
-        return Array(r)
+        return Quantity(r)
       else:
         _check_out(out)
         out.value = r
@@ -2621,11 +2737,11 @@ class Array(object):
 
   def clamp(
       self,
-      min_value: Optional[Union['Array', jax.Array, np.ndarray]] = None,
-      max_value: Optional[Union['Array', jax.Array, np.ndarray]] = None,
+      min_value: Optional[Union['Quantity', jax.Array, np.ndarray]] = None,
+      max_value: Optional[Union['Quantity', jax.Array, np.ndarray]] = None,
       *,
-      out: Optional[Union['Array', jax.Array, np.ndarray]] = None
-  ) -> Optional['Array']:
+      out: Optional[Union['Quantity', jax.Array, np.ndarray]] = None
+  ) -> Optional['Quantity']:
     """
     return the value between min_value and max_value,
     if min_value is None, then no lower bound,
@@ -2635,15 +2751,15 @@ class Array(object):
     max_value = _as_jax_array_(max_value)
     r = jnp.clip(self.value, min_value, max_value)
     if out is None:
-      return Array(r, unit=self.units)
+      return Quantity(r, unit=self.units)
     else:
       _check_out(out)
       out.value = r
       out.units = self.units
 
   def clamp_(self,
-             min_value: Optional[Union['Array', jax.Array, np.ndarray]] = None,
-             max_value: Optional[Union['Array', jax.Array, np.ndarray]] = None):
+             min_value: Optional[Union['Quantity', jax.Array, np.ndarray]] = None,
+             max_value: Optional[Union['Quantity', jax.Array, np.ndarray]] = None):
     """
     return the value between min_value and max_value,
     if min_value is None, then no lower bound,
@@ -2653,37 +2769,37 @@ class Array(object):
     return self
 
   def clip_(self,
-            min_value: Optional[Union['Array', jax.Array, np.ndarray]] = None,
-            max_value: Optional[Union['Array', jax.Array, np.ndarray]] = None):
+            min_value: Optional[Union['Quantity', jax.Array, np.ndarray]] = None,
+            max_value: Optional[Union['Quantity', jax.Array, np.ndarray]] = None):
     """
     alias for clamp_
     """
     self.value = self.clip(min_value, max_value, out=self)
     return self
 
-  def clone(self) -> 'Array':
-    return Array(self.value.copy(), unit=self.units)
+  def clone(self) -> 'Quantity':
+    return Quantity(self.value.copy(), unit=self.units)
 
-  def copy_(self, src: Union['Array', jax.Array, np.ndarray]) -> 'Array':
+  def copy_(self, src: Union['Quantity', jax.Array, np.ndarray]) -> 'Quantity':
     self.value = jnp.copy(_as_jax_array_(src))
     return self
 
   def cov_with(
       self,
-      y: Optional[Union['Array', jax.Array, np.ndarray]] = None,
+      y: Optional[Union['Quantity', jax.Array, np.ndarray]] = None,
       rowvar: bool = True,
       bias: bool = False,
       ddof: Optional[int] = None,
-      fweights: Union['Array', jax.Array, np.ndarray] = None,
-      aweights: Union['Array', jax.Array, np.ndarray] = None
-  ) -> 'Array':
+      fweights: Union['Quantity', jax.Array, np.ndarray] = None,
+      aweights: Union['Quantity', jax.Array, np.ndarray] = None
+  ) -> 'Quantity':
     y = _as_jax_array_(y)
     fweights = _as_jax_array_(fweights)
     aweights = _as_jax_array_(aweights)
     r = jnp.cov(self.value, y, rowvar, bias, fweights, aweights)
-    return Array(r)
+    return Quantity(r)
 
-  def expand(self, *sizes) -> 'Array':
+  def expand(self, *sizes) -> 'Quantity':
     """
     Expand an array to a new shape.
 
@@ -2695,7 +2811,7 @@ class Array(object):
 
     Returns
     -------
-    expanded : Array
+    expanded : Quantity
         A readonly view on the original array with the given shape. It is
         typically not contiguous. Furthermore, more than one element of a
         expanded array may refer to a single memory location.
@@ -2717,7 +2833,7 @@ class Array(object):
         raise ValueError(
           f'The expanded size of the tensor ({sizes_list[base + i]}) must match the existing size ({v}) at non-singleton '
           f'dimension {i}.  Target sizes: {sizes}.  Tensor sizes: {self.shape}')
-    return Array(jnp.broadcast_to(self.value, sizes_list), unit=self.unit)
+    return Quantity(jnp.broadcast_to(self.value, sizes_list), unit=self.unit)
 
   def tree_flatten(self):
     return (self.value,), None
@@ -2783,25 +2899,25 @@ class Array(object):
   # ---------------- #
 
   def bool(self):
-    return Array(jnp.asarray(self.value, dtype=jnp.bool_), unit=self.unit)
+    return Quantity(jnp.asarray(self.value, dtype=jnp.bool_), unit=self.unit)
 
   def int(self):
-    return Array(jnp.asarray(self.value, dtype=jnp.int32), unit=self.unit)
+    return Quantity(jnp.asarray(self.value, dtype=jnp.int32), unit=self.unit)
 
   def long(self):
-    return Array(jnp.asarray(self.value, dtype=jnp.int64), unit=self.unit)
+    return Quantity(jnp.asarray(self.value, dtype=jnp.int64), unit=self.unit)
 
   def half(self):
-    return Array(jnp.asarray(self.value, dtype=jnp.float16), unit=self.unit)
+    return Quantity(jnp.asarray(self.value, dtype=jnp.float16), unit=self.unit)
 
   def float(self):
-    return Array(jnp.asarray(self.value, dtype=jnp.float32), unit=self.unit)
+    return Quantity(jnp.asarray(self.value, dtype=jnp.float32), unit=self.unit)
 
   def double(self):
-    return Array(jnp.asarray(self.value, dtype=jnp.float64), unit=self.unit)
+    return Quantity(jnp.asarray(self.value, dtype=jnp.float64), unit=self.unit)
 
 
-class Unit(Array):
+class Unit(Quantity):
   r"""
    A physical unit.
 
@@ -3144,7 +3260,7 @@ class Unit(Array):
     if isinstance(other, Unit):
       return other.unit is self.unit and other.scale == self.scale
     else:
-      return Array.__eq__(self, other)
+      return Quantity.__eq__(self, other)
 
   def __neq__(self, other):
     return not self.__eq__(other)
@@ -3416,13 +3532,13 @@ def check_units(**au):
       arg_names = f.__code__.co_varnames[0: f.__code__.co_argcount]
       for n, v in zip(arg_names, args[0: f.__code__.co_argcount]):
         if (
-            not isinstance(v, (Array, str, bool))
+            not isinstance(v, (Quantity, str, bool))
             and v is not None
             and n in au
         ):
           try:
             # allow e.g. to pass a Python list of values
-            v = Array(v)
+            v = Quantity(v)
           except TypeError:
             if have_same_dimensions(au[n], 1):
               raise TypeError(

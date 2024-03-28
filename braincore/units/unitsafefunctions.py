@@ -8,7 +8,7 @@ import jax.numpy as jnp
 
 from .base import (
   DIMENSIONLESS,
-  Array,
+  Quantity,
   check_units,
   fail_for_dimension_mismatch,
   is_dimensionless,
@@ -64,7 +64,7 @@ def where(condition, *args, **kwds):  # pylint: disable=C0111
     else:
       # as both arguments have the same unit, just use the first one's
       dimensionless_args = [jnp.asarray(arg) for arg in args]
-      return Array.with_dimensions(
+      return Quantity.with_dimensions(
         jnp.where(condition, *dimensionless_args), args[0].dimensions
       )
   else:
@@ -136,7 +136,7 @@ def wrap_function_to_method(func):
 
   @wraps(func)
   def f(x, *args, **kwds):  # pylint: disable=C0111
-    if isinstance(x, Array):
+    if isinstance(x, Quantity):
       return getattr(x, func.__name__)(*args, **kwds)
     else:
       # no need to wrap anything
@@ -202,7 +202,7 @@ def arange(*args, **kwargs):
   # https://numpy.org/devdocs/release/2.0.0-notes.html#arange-s-start-argument-is-positional-only
   # TODO: check whether this is still the case in the final release
   if start == 0:
-    return Array(
+    return Quantity(
       jnp.arange(
         stop=jnp.asarray(stop),
         step=jnp.asarray(step),
@@ -212,7 +212,7 @@ def arange(*args, **kwargs):
       copy=False,
     )
   else:
-    return Array(
+    return Quantity(
       jnp.arange(
         jnp.asarray(start),
         stop=jnp.asarray(stop),
@@ -247,7 +247,7 @@ def linspace(start, stop, num=50, endpoint=True, retstep=False, dtype=None):
     retstep=retstep,
     dtype=dtype,
   )
-  return Array(result, dim=dim, copy=False)
+  return Quantity(result, dim=dim, copy=False)
 
 
 linspace._do_not_run_doctests = True

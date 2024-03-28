@@ -5,12 +5,15 @@ The core system for the next-generation BrainPy framework.
 __version__ = "0.1.1"
 
 from . import environ
+from . import import_utils
 from . import math
 from . import mixin
 from . import random
 from . import share
 from . import surrogate
-from . import units
+
+# from . import units
+units = import_utils.LazyImport(".units")
 from ._module import *
 from ._module import __all__ as _module_all
 from ._projection import *
