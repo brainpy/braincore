@@ -50,6 +50,7 @@ __all__ = [
 
 
 def where(condition, *args, **kwds):  # pylint: disable=C0111
+  condition = jnp.asarray(condition)
   if len(args) == 0:
     # nothing to do
     return jnp.where(condition, *args, **kwds)
@@ -58,18 +59,27 @@ def where(condition, *args, **kwds):  # pylint: disable=C0111
     fail_for_dimension_mismatch(
       args[0], args[1], "x and y need to have the same dimensions"
     )
-
+    new_args = []
+    for arg in args:
+      if isinstance(arg, Quantity):
+        new_args.append(arg.value)
     if is_dimensionless(args[0]):
-      return jnp.where(condition, *args, **kwds)
+      if len(new_args) == 2:
+        return jnp.where(condition, *new_args, **kwds)
+      else:
+        return jnp.where(condition, *args, **kwds)
     else:
       # as both arguments have the same unit, just use the first one's
-      dimensionless_args = [jnp.asarray(arg) for arg in args]
-      return Quantity.with_dimensions(
-        jnp.where(condition, *dimensionless_args), args[0].dimensions
+      dimensionless_args = [jnp.asarray(arg.value) if isinstance(arg, Quantity) else jnp.asarray(arg) for arg in args]
+      return Quantity.with_units(
+        jnp.where(condition, *dimensionless_args), args[0].unit
       )
   else:
-    # illegal number of arguments, let numpy take care of this
-    return jnp.where(condition, *args, **kwds)
+    # illegal number of arguments
+    if len(args) == 1:
+      raise ValueError("where() takes 2 or 3 positional arguments but 1 was given")
+    elif len(args) > 2:
+      raise TypeError("where() takes 2 or 3 positional arguments but {} were given".format(len(args)))
 
 
 where.__doc__ = jnp.where.__doc__

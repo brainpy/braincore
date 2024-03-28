@@ -43,7 +43,7 @@ def _check_input_array(array):
   elif isinstance(array, (numbers.Number, jax.Array, np.number, np.ndarray, list, tuple)):
     return Quantity(value=jnp.asarray(array))
   else:
-    raise ValueError('Input array should be an instance of Array.')
+    raise TypeError('Input array should be an instance of Array.')
 
 
 def _check_input_not_array(array):
@@ -607,6 +607,7 @@ def fail_for_dimension_mismatch(
   else:
     return dim1, dim2
 
+
 def in_unit(x, u, precision=None):
   """
   Display a value in a certain unit with a given precision.
@@ -968,6 +969,7 @@ def can_convert_to_dtype(elements, dtype):
     return True
   except ValueError:
     return False
+
 
 @register_pytree_node_class
 class Quantity(object):
@@ -1513,7 +1515,8 @@ class Quantity(object):
     is_scalar = is_scalar_type(other)
     if not is_scalar and not isinstance(other, (jax.Array, Quantity, np.ndarray)):
       return NotImplemented
-    if isinstance(other, Quantity):
+    if not is_scalar or not jnp.isinf(other):
+      other = _check_input_array(other)
       message = "Cannot perform comparison {value1} %s {value2}, units do not match" % operator_str
       fail_for_dimension_mismatch(self, other, message, value1=self, value2=other)
     other = _check_input_array(other)
@@ -1625,6 +1628,12 @@ class Quantity(object):
   def __div__(self, oc):
     return self._binary_operation(oc, operator.truediv, operator.truediv)
 
+  def __idiv__(self, oc):
+    r = self.__div__(oc)
+    self.value = r.value
+    self.unit = r.unit
+    return self
+
   def __truediv__(self, oc):
     return self.__div__(oc)
 
@@ -1682,7 +1691,7 @@ class Quantity(object):
   # -------------------- #
 
   def __pow__(self, oc):
-    if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)) or is_scalar_type(oc):
+    if isinstance(oc, (jax.Array, np.ndarray, numbers.Number, Quantity)) or is_scalar_type(oc):
       fail_for_dimension_mismatch(
         oc,
         error_message=(
@@ -1698,8 +1707,8 @@ class Quantity(object):
         oc = oc.value
       return Quantity(jnp.array(self.value) ** oc, unit=self.unit ** oc)
     else:
-      return NotImplemented('Cannot calculate {base} ** {exponent}, the '
-                            'exponent has to be dimensionless'.format(base=self, exponent=oc))
+      return TypeError('Cannot calculate {base} ** {exponent}, the '
+                       'exponent has to be dimensionless'.format(base=self, exponent=oc))
 
   def __rpow__(self, oc):
     if self.is_dimensionless:
@@ -1949,7 +1958,7 @@ class Quantity(object):
     # identical
     if dim_exponent.size > 1:
       dim_exponent = dim_exponent[0]
-    return Quantity(jnp.array(prod_res), self.dim ** dim_exponent)
+    return Quantity(jnp.array(prod_res), unit=self.unit ** dim_exponent)
 
   def put(self, indices, values):
     """Replaces specified elements of an array with given values.
