@@ -297,13 +297,13 @@ def set_gpu_preallocation(mode: Union[float, bool]):
 @functools.lru_cache()
 def _get_uint(precision: int):
   if precision == 64:
-    return np.uint64
+    return jnp.uint64
   elif precision == 32:
-    return np.uint32
+    return jnp.uint32
   elif precision == 16:
-    return np.uint16
+    return jnp.uint16
   elif precision == 8:
-    return np.uint8
+    return jnp.uint8
   else:
     raise ValueError(f'Unsupported precision: {precision}')
 
@@ -311,13 +311,13 @@ def _get_uint(precision: int):
 @functools.lru_cache()
 def _get_int(precision: int):
   if precision == 64:
-    return np.int64
+    return jnp.int64
   elif precision == 32:
-    return np.int32
+    return jnp.int32
   elif precision == 16:
-    return np.int16
+    return jnp.int16
   elif precision == 8:
-    return np.int8
+    return jnp.int8
   else:
     raise ValueError(f'Unsupported precision: {precision}')
 
@@ -325,9 +325,9 @@ def _get_int(precision: int):
 @functools.lru_cache()
 def _get_float(precision: int):
   if precision == 64:
-    return np.float64
+    return jnp.float64
   elif precision == 32:
-    return np.float32
+    return jnp.float32
   elif precision == 16:
     return jnp.bfloat16
     # return np.float16
@@ -338,11 +338,11 @@ def _get_float(precision: int):
 @functools.lru_cache()
 def _get_complex(precision: int):
   if precision == 64:
-    return np.complex128
+    return jnp.complex128
   elif precision == 32:
-    return np.complex64
+    return jnp.complex64
   elif precision == 16:
-    return np.complex32
+    return jnp.complex32
   else:
     raise ValueError(f'Unsupported precision: {precision}')
 
