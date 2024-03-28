@@ -2,7 +2,7 @@ import collections
 import itertools
 import numbers
 import operator
-from typing import Any, Union, Optional, Sequence, Callable
+from typing import Union, Optional, Sequence, Callable
 
 import jax
 import jax.numpy as jnp
@@ -10,10 +10,10 @@ import numpy as np
 from jax.dtypes import canonicalize_dtype
 from jax.tree_util import register_pytree_node_class
 
+from braincore.environ import dftype
+
 __all__ = [
   'Array',
-  'JaxArray',
-  'ndarray',
   'Unit',
   'UnitRegistry',
   'DimensionMismatchError',
@@ -29,20 +29,8 @@ __all__ = [
   'get_unit',
 ]
 
-numpy_func_return = 'bp_array'
 _all_slice = slice(None, None, None)
 unit_checking = True
-
-
-def _flatten(iterable):
-  """
-  Flatten a given list `iterable`.
-  """
-  for e in iterable:
-    if isinstance(e, list):
-      yield from _flatten(e)
-    else:
-      yield e
 
 
 def _as_jax_array_(obj):
@@ -58,10 +46,10 @@ def _check_input_array(array):
     return array
 
 
-def _return(a):
-  if numpy_func_return == 'bp_array' and isinstance(a, jax.Array) and a.ndim > 0:
-    return Array(value=a, unit=DIMENSIONLESS, copy=False)
-  return a
+def _check_input_not_array(array):
+  if isinstance(array, Array):
+    raise ValueError('Input array should not be an instance of Array.')
+  return array
 
 
 def _check_out(out):
@@ -313,7 +301,7 @@ class Dimension:
     return self.__div__(value)
 
   def __pow__(self, value):
-    value = np.array(value, copy=False)
+    value = np.array(value)
     if value.size > 1:
       raise TypeError("Too many exponents")
     return get_or_create_dimension([x * value for x in self._dims])
@@ -379,7 +367,7 @@ def get_or_create_dimension(*args, **kwds):
   --------
   The following are all definitions of the dimensions of force
 
-  >>> from brainpy.math.units import *
+  >>> from braincore.units import *
   >>> get_or_create_dimension(length=1, mass=1, time=-2)
   metre * kilogram * second ** -2
   >>> get_or_create_dimension(m=1, kg=1, s=-2)
@@ -501,15 +489,7 @@ def get_dimensions(obj):
   except AttributeError:
     # The following is not very pretty, but it will avoid the costly
     # isinstance check for the common types
-    if type(obj) in [
-      int,
-      float,
-      np.int32,
-      np.int64,
-      np.float32,
-      np.float64,
-      np.ndarray,
-    ] or isinstance(obj, (numbers.Number, jnp.number, jnp.ndarray)):
+    if isinstance(obj, (numbers.Number, jax.Array, np.number, np.ndarray)):
       return DIMENSIONLESS
     try:
       return Array(obj).unit
@@ -670,7 +650,7 @@ def in_unit(x, u, precision=None):
 
   Examples
   --------
-  >>> from brainpy.math.units import *
+  >>> from braincore.units import *
   >>> in_unit(3 * volt, mvolt)
   '3000. mV'
   >>> in_unit(123123 * msecond, second, 2)
@@ -692,7 +672,7 @@ def in_unit(x, u, precision=None):
   """
   if is_dimensionless(x):
     fail_for_dimension_mismatch(x, u, 'Non-matching unit for function "in_unit"')
-    return str(np.array(x / u, copy=False))
+    return str(np.array(x / u))
   else:
     return x.in_unit(u, precision=precision)
 
@@ -716,7 +696,7 @@ def in_best_unit(x, precision=None):
 
   Examples
   --------
-  >>> from brainpy.math.units import *
+  >>> from braincore.units import *
   >>> in_best_unit(0.00123456 * volt)
   '1.23456 mV'
   >>> in_best_unit(0.00123456 * volt, 2)
@@ -739,7 +719,7 @@ def in_best_unit(x, precision=None):
   return x.in_unit(u, precision=precision)
 
 
-def array_with_units(floatval, units):
+def array_with_units(floatval, units: Dimension, dtype=None):
   """
   Create a new `Array` with the given dimensions. Calls
   `get_or_create_dimension` with the dimension tuple of the `dims`
@@ -753,6 +733,8 @@ def array_with_units(floatval, units):
       The floating point value of the array.
   units: `Dimension`
       The unit dimensions of the array.
+  dtype: `dtype`, optional
+      The data type of the array.
 
   Returns
   -------
@@ -761,11 +743,11 @@ def array_with_units(floatval, units):
 
   Examples
   --------
-  >>> from brainpy.math.units import *
+  >>> from braincore.units import *
   >>> array_with_units(0.001, volt.unit)
   1. * mvolt
   """
-  return Array(floatval, unit=get_or_create_dimension(units._dims))
+  return Array(floatval, unit=get_or_create_dimension(units._dims), dtype=dtype)
 
 
 def is_dimensionless(obj):
@@ -923,7 +905,7 @@ def wrap_function_dimensionless(func):
       ),
       value=x,
     )
-    return func(jnp.array(x, copy=False), *args, **kwds)
+    return func(jnp.array(x), *args, **kwds)
 
   f._arg_units = [1]
   f._return_unit = 1
@@ -945,8 +927,8 @@ def wrap_function_keep_dimensions(func):
   ``sum`` to work as expected with additional ``axis`` etc. arguments.
   """
 
-  def f(x, *args, **kwds):  # pylint: disable=C0111
-    return Array(func(jnp.array(x, copy=False), *args, **kwds), dim=x.dim)
+  def f(x: Array, *args, **kwds):  # pylint: disable=C0111
+    return Array(func(x.value, *args, **kwds), unit=x.unit)
 
   f._arg_units = [None]
   f._return_unit = lambda u: u
@@ -969,9 +951,8 @@ def wrap_function_change_dimensions(func, change_dim_func):
   other arguments are ignored/untouched.
   """
 
-  def f(x, *args, **kwds):  # pylint: disable=C0111
-    ar = np.array(x, copy=False)
-    return Array(func(ar, *args, **kwds), dim=change_dim_func(ar, x.dim))
+  def f(x: Array, *args, **kwds):  # pylint: disable=C0111
+    return Array(func(x.value, *args, **kwds), unit=change_dim_func(x.value, x.unit))
 
   f._arg_units = [None]
   f._return_unit = change_dim_func
@@ -992,8 +973,8 @@ def wrap_function_remove_dimensions(func):
   other arguments are ignored/untouched.
   """
 
-  def f(x, *args, **kwds):  # pylint: disable=C0111
-    return func(jnp.array(x, copy=False), *args, **kwds)
+  def f(x: Array, *args, **kwds):  # pylint: disable=C0111
+    return func(x.value, *args, **kwds)
 
   f._arg_units = [None]
   f._return_unit = 1
@@ -1005,102 +986,53 @@ def wrap_function_remove_dimensions(func):
 
 @register_pytree_node_class
 class Array(object):
-  # value: jax.Array, np.ndarray, or number, custom type, pytree
-  # unit: Unit, 1, None
+  """
+
+  """
   __slots__ = ('_value', '_unit')
+  _value: jax.Array
+  _unit: Dimension
 
-  # def __new__(cls, arr, unit=DIMENSIONLESS, dtype=None, copy=False, force_array=False):
-  #   if unit is DIMENSIONLESS and not force_array:
-  #     arr = jnp.array(arr, dtype=dtype, copy=copy)
-  #     if arr.shape == ():
-  #       # For scalar values, return a simple Python object instead of
-  #       # a jax numpy scalar
-  #       return arr.item()
-  #     return arr
-  #
-  #   # All jnp.ndarray subclasses need something like this, see
-  #   # http://www.scipy.org/Subclasses
-  #   subarr = jnp.array(arr, dtype=dtype, copy=copy).view(cls)
-  #
-  #   # We only want numerical datatypes
-  #   if not issubclass(jnp.dtype(subarr.dtype).type, (jnp.number, jnp.bool_)):
-  #     raise TypeError("Array can only be created from numerical data.")
-  #
-  #   # If a unit is given, force this unit
-  #   if unit is not DIMENSIONLESS:
-  #     subarr.unit = unit
-  #     return subarr
-  #
-  #   # Use the given unit or the unit of the given array (if any)
-  #   try:
-  #     subarr.unit = arr.unit
-  #   except AttributeError:
-  #     if not isinstance(arr, (jnp.ndarray, jnp.number, numbers.Number)):
-  #       # check whether it is an iterable containing Array objects
-  #       try:
-  #         is_array = [isinstance(x, Array) for x in _flatten(arr)]
-  #       except TypeError:
-  #         # Not iterable
-  #         is_array = [False]
-  #       if len(is_array) == 0:
-  #         # Empty list
-  #         subarr.unit = DIMENSIONLESS
-  #       elif all(is_array):
-  #         units = [x.unit for x in _flatten(arr)]
-  #         one_unit = units[0]
-  #         for d in units:
-  #           if d != one_unit:
-  #             raise DimensionMismatchError(
-  #               "Mixing arrays "
-  #               "with different "
-  #               "dimensions is not"
-  #               "allowed",
-  #               d,
-  #               one_unit,
-  #             )
-  #         subarr.unit = one_unit
-  #       elif any(is_array):
-  #         raise TypeError(
-  #           "Mixing arrays and non-arrays is not allowed."
-  #         )
-  #   return subarr
+  __array_priority__ = 1000
 
-  def __init__(self, value, dtype=float, unit=DIMENSIONLESS, copy=False):
-    # This checks if the list is empty
-    try:
-      is_empty_list = not value
-    except:
-      is_empty_list = False
+  def __init__(self, value, dtype=None, unit=DIMENSIONLESS):
+    dtype = dtype or dftype()
 
     # array value
     if isinstance(value, Array):
       self._unit = value.unit
-      self._value = jnp.array(value.value, dtype=dtype, copy=copy)
+      self._value = jnp.array(value.value, dtype=dtype)
       return
-    if is_empty_list:
-      self._unit = unit
-      self._value = value
-      return
-    elif isinstance(value, (tuple, list, np.ndarray, jnp.ndarray)):
-      # Existing logic to check for mixed types or process units
-      has_units = [hasattr(v, 'unit') for v in value]
-      if any(has_units) and not all(has_units):
-        raise TypeError("All elements must have the same unit or no unit at all")
-      if all(has_units):
-        units = [v.unit for v in value]
-        if not all(u == units[0] for u in units):
-          raise TypeError("All elements must have the same unit")
-        unit = units[0]
-        value = [v.value for v in value]
-      # Transform to jnp array
-      value = jnp.array(value, dtype=dtype, copy=copy)
+
+    elif isinstance(value, (tuple, list)):
+      if len(value) == 0:
+        value = jnp.asarray(1., dtype=dtype)
+      else:
+        # Existing logic to check for mixed types or process units
+        has_units = [hasattr(v, 'unit') for v in value]
+        if any(has_units) and not all(has_units):
+          raise TypeError("All elements must have the same unit or no unit at all")
+        if all(has_units):
+          units = [v.unit for v in value]
+          if not all(u == units[0] for u in units[1:]):
+            raise TypeError("All elements must have the same unit")
+          unit = units[0]
+          value = [v.value for v in value]
+          del units
+        del has_units
+        # Transform to jnp array
+        value = jnp.array(value, dtype=dtype)
+
+    elif isinstance(value, (np.ndarray, jax.Array)):
+      value = jnp.asarray(value, dtype=dtype)
+
     elif isinstance(value, (np.number, numbers.Number)):
-      value = jnp.array(value, dtype=dtype, copy=copy)
+      value = jnp.array(value, dtype=dtype)
+
     else:
       raise TypeError(f"Invalid type for value: {type(value)}")
-    if dtype is not None:
-      value = jnp.array(value, dtype=dtype, copy=copy)
 
+    # value
     self._value = value
     # unit
     self._unit = unit
@@ -1112,11 +1044,28 @@ class Array(object):
 
   @value.setter
   def value(self, value):
-    self_value = self._check_tracer()
+    """
+    
+    Examples::
+    
+    >>> a = jax.numpy.array([1, 2, 3]) * mV
+    >>> a[:] = jax.numpy.array([4, 5, 6]) * mV
+    >>> a.value = jax.numpy.array([7, 8, 9])    
+    
+    Args:
+      value: 
 
+    Returns:
+
+    """
+    self_value = self._check_tracer()
     if isinstance(value, Array):
-      value = value.value
-    elif isinstance(value, np.ndarray):
+      raise ValueError("Cannot set the value of an Array object to another Array object.")
+      # if self.unit != value.unit:
+      #   raise ValueError(f"The unit of the original data is {self.unit}, "
+      #                    f"while we got {value.unit}.")
+      # value = value.value
+    if isinstance(value, np.ndarray):
       value = jnp.asarray(value)
     elif isinstance(value, jax.Array):
       pass
@@ -1140,14 +1089,14 @@ class Array(object):
 
   @unit.setter
   def unit(self, unit):
-    self._unit = unit
+    raise AttributeError("Cannot set the unit of an Array object")
 
   ### UNITS ###
 
   @staticmethod
-  def with_dimensions(value, *args, **keywords):
+  def with_units(value, *args, **keywords):
     """
-    Create a `Array` object with dim.
+    Create a `Array` object with the given units.
 
     Parameters
     ----------
@@ -1167,10 +1116,10 @@ class Array(object):
     --------
     All of these define an equivalent `Array` object:
 
-    >>> from brainpy.math.units import *
-    >>> Array.with_dimensions(2, get_or_create_dimension(length=1))
+    >>> from braincore.units import *
+    >>> Array.with_units(2, get_or_create_dimension(length=1))
     2. * metre
-    >>> Array.with_dimensions(2, length=1)
+    >>> Array.with_units(2, length=1)
     2. * metre
     >>> 2 * metre
     2. * metre
@@ -1181,10 +1130,8 @@ class Array(object):
       dimensions = get_or_create_dimension(*args, **keywords)
     return Array(value, unit=dimensions)
 
-  is_dimensionless = property(
-    lambda self: self._unit.is_dimensionless,
-    doc="Wehther the array is dimensionless"
-  )
+  is_dimensionless = property(lambda self: self.unit.is_dimensionless,
+                              doc="Whether the array is dimensionless")
 
   def has_same_unit(self, other):
     """
@@ -1203,7 +1150,7 @@ class Array(object):
     other_unit = get_unit(other.unit)
     return (get_unit(self.unit) is other_unit) or (get_unit(self.unit) == other_unit)
 
-  def in_unit(self, u, precision=None, python_code=False):
+  def in_unit(self, u, precision=None, python_code=False) -> str:
     """
     Represent the Array in a given unit.
 
@@ -1218,6 +1165,7 @@ class Array(object):
         Whether to return a string that can be used as python code.
         If True, the string will be formatted as a python expression.
         If False, the string will be formatted as a human-readable string.
+
     Returns
     -------
     s : `str`
@@ -1225,6 +1173,7 @@ class Array(object):
 
     Examples
     --------
+    >>> from braincore.units import *
     >>> x = 25.123456 * mV
     >>> x.in_unit(volt)
     '0.02512346 V'
@@ -1234,8 +1183,7 @@ class Array(object):
     '25.123 mV'
     """
     fail_for_dimension_mismatch(self, u, 'Non-matching unit for method "in_unit"')
-
-    value = np.asarray(self.value / u)
+    value = np.asarray(self.value / u.value)
     if value.shape == ():
       s = np.array_str(jnp.array([value]), precision=precision)
       s = s.replace("[", "").replace("]", "").strip()
@@ -1293,9 +1241,7 @@ class Array(object):
           pass
       return Array(1, unit=self.unit)
     else:
-      return self.get_best_unit(
-        standard_unit_register, user_unit_register, additional_unit_register
-      )
+      return self.get_best_unit(standard_unit_register, user_unit_register, additional_unit_register)
 
   def in_best_unit(self, precision=None, python_code=False, *regs):
     """
@@ -1323,7 +1269,7 @@ class Array(object):
 
     Examples
     --------
-    >>> from brainpy.math.units import *
+    >>> from braincore.units import *
     >>> x = 0.00123456 * volt
     >>> x.in_best_unit()
     '1.23456 mV'
@@ -1335,25 +1281,12 @@ class Array(object):
 
   def _check_tracer(self):
     self_value = self.value
-    if hasattr(self_value, '_trace') and hasattr(self_value._trace.main, 'jaxpr_stack'):
-      if len(self_value._trace.main.jaxpr_stack) == 0:
-        raise RuntimeError('This Array is modified during the transformation. '
-                           'BrainPy only supports transformations for Variable. '
-                           'Please declare it as a Variable.') from jax.core.escaped_tracer_error(self_value, None)
+    # if hasattr(self_value, '_trace') and hasattr(self_value._trace.main, 'jaxpr_stack'):
+    #   if len(self_value._trace.main.jaxpr_stack) == 0:
+    #     raise RuntimeError('This Array is modified during the transformation. '
+    #                        'BrainPy only supports transformations for Variable. '
+    #                        'Please declare it as a Variable.') from jax.core.escaped_tracer_error(self_value, None)
     return self_value
-
-  @property
-  def sharding(self):
-    return self._value.sharding
-
-  @property
-  def addressable_shards(self):
-    return self._value.addressable_shards
-
-  def update(self, value):
-    """Update the value of this Array.
-    """
-    self.value = value
 
   @property
   def dtype(self):
@@ -1391,24 +1324,6 @@ class Array(object):
 
   def __repr__(self) -> str:
     return self.in_best_unit(python_code=True)
-    # print_code = repr(self.value)
-    # if ', dtype' in print_code:
-    #   print_code = print_code.split(', dtype')[0] + ')'
-    # prefix = f'{self.__class__.__name__}'
-    # prefix2 = f'{self.__class__.__name__}(value='
-    # if '\n' in print_code:
-    #   lines = print_code.split("\n")
-    #   blank1 = " " * len(prefix2)
-    #   lines[0] = prefix2 + lines[0]
-    #   for i in range(1, len(lines)):
-    #     lines[i] = blank1 + lines[i]
-    #   lines[-1] += ","
-    #   blank2 = " " * (len(prefix) + 1)
-    #   lines.append(f'{blank2}dtype={self.dtype})')
-    #   print_code = "\n".join(lines)
-    # else:
-    #   print_code = prefix2 + print_code + f', dtype={self.dtype})'
-    # return print_code
 
   def __str__(self) -> str:
     return self.in_best_unit()
@@ -1430,32 +1345,27 @@ class Array(object):
     - https://github.com/google/jax/pull/3821
     """
     for i in range(self.value.shape[0]):
-      yield self.value[i]
+      yield Array(self.value[i], unit=self.unit)
 
   def __getitem__(self, index):
     if isinstance(index, slice) and (index == _all_slice):
       return Array(self.value, unit=self.unit)
     elif isinstance(index, tuple):
-      index = tuple((x.value if isinstance(x, Array) else x) for x in index)
+      for x in index:
+        assert not isinstance(x, Array), "Array indices must be integers or slices, not Array"
     elif isinstance(index, Array):
-      index = index.value
+      raise TypeError("Array indices must be integers or slices, not Array")
     return Array(self.value[index], unit=self.unit)
 
-  def __setitem__(self, index, value):
+  def __setitem__(self, index, value: 'Array'):
+    assert isinstance(value, Array), "Only Array can be assigned to Array."
     fail_for_dimension_mismatch(self, value, "Inconsistent units in assignment")
-    # value is Array
-    if isinstance(value, Array):
-      value = value.value
-    # value is numpy.ndarray
-    elif isinstance(value, np.ndarray):
-      value = jnp.asarray(value)
+    value = value.value
 
     # index is a tuple
+    assert not isinstance(index, Array), "Array indices must be integers or slices, not Array"
     if isinstance(index, tuple):
-      index = tuple(_check_input_array(x) for x in index)
-    # index is Array
-    elif isinstance(index, Array):
-      index = index.value
+      index = tuple(_check_input_not_array(x) for x in index)
     # index is numpy.ndarray
     elif isinstance(index, np.ndarray):
       index = jnp.asarray(index)
@@ -1468,10 +1378,53 @@ class Array(object):
   # operations #
   # ---------- #
 
+  def __len__(self) -> int:
+    return len(self.value)
+
+  def __neg__(self):
+    return Array(self.value.__neg__(), unit=self.unit)
+
+  def __pos__(self):
+    return Array(self.value.__pos__(), unit=self.unit)
+
+  def __abs__(self):
+    return Array(self.value.__abs__(), unit=self.unit)
+
+  def __invert__(self):
+    return Array(self.value.__invert__(), unit=self.unit)
+
+  def _comparison(self, other, operator_str, operation):
+    is_scalar = is_scalar_type(other)
+    if not is_scalar and not isinstance(other, (jax.Array, Array, np.ndarray)):
+      return NotImplemented
+    if isinstance(other, Array):
+      message = "Cannot perform comparison {value1} %s {value2}, units do not match" % operator_str
+      fail_for_dimension_mismatch(self, other, message, value1=self, value2=other)
+    other = _check_input_array(other)
+    return operation(self.value, other.value)
+
+  def __eq__(self, oc):
+    return self._comparison(oc, "==", operator.eq)
+
+  def __ne__(self, oc):
+    return self._comparison(oc, "!=", operator.ne)
+
+  def __lt__(self, oc):
+    return self._comparison(oc, "<", operator.lt)
+
+  def __le__(self, oc):
+    return self._comparison(oc, "<=", operator.le)
+
+  def __gt__(self, oc):
+    return self._comparison(oc, ">", operator.gt)
+
+  def __ge__(self, oc):
+    return self._comparison(oc, ">=", operator.ge)
+
   def _binary_operation(
       self,
       other,
-      operation: Callable,
+      value_operation: Callable,
       unit_operation: Callable = lambda a, b: a,
       fail_for_mismatch: bool = False,
       operator_str: str = None,
@@ -1484,7 +1437,7 @@ class Array(object):
     ----------
     other : {`Array`, `ndarray`, scalar}
         The object with which the operation should be performed.
-    operation : function of two variables
+    value_operation : function of two variables
         The function with which the two objects are combined. For example,
         `operator.mul` for a multiplication.
     unit_operation : function of two variables, optional
@@ -1506,128 +1459,42 @@ class Array(object):
 
     if fail_for_mismatch:
       if inplace:
-        message = (
-            "Cannot calculate ... %s {value}, units do not match" % operator_str
-        )
-        _, other_unit = fail_for_dimension_mismatch(
-          self, other, message, value=other
-        )
+        message = "Cannot calculate ... %s {value}, units do not match" % operator_str
+        _, other_unit = fail_for_dimension_mismatch(self, other, message, value=other)
       else:
-        message = (
-            "Cannot calculate {value1} %s {value2}, units do not match"
-            % operator_str
-        )
-        _, other_unit = fail_for_dimension_mismatch(
-          self, other, message, value1=self, value2=other
-        )
+        message = "Cannot calculate {value1} %s {value2}, units do not match" % operator_str
+        _, other_unit = fail_for_dimension_mismatch(self, other, message, value1=self, value2=other)
 
     if other_unit is None:
       other_unit = get_dimensions(other)
 
+    newdims = unit_operation(self.unit, other_unit)
+    result = value_operation(self.value, other.value)
+    r = Array(result, unit=newdims)
     if inplace:
-      if self.shape == ():
-        self_value = Array(value=self.value, unit=self.unit, copy=True)
-      else:
-        self_value = self
-      operation(self_value, other)
-      self_value.unit = unit_operation(self.unit, other_unit)
-      return self_value
-    else:
-      newdims = unit_operation(self.unit, other_unit)
-      self_arr = np.array(self, copy=False)
-      other_arr = np.array(other, copy=False)
-      result = operation(self_arr, other_arr)
-      return Array(result, unit=newdims)
-
-  def __len__(self) -> int:
-    return len(self.value)
-
-  def __neg__(self):
-    return Array(self.value.__neg__(), unit=self.unit)
-
-  def __pos__(self):
-    return Array(self.value.__pos__(), unit=self.unit)
-
-  def __abs__(self):
-    return Array(self.value.__abs__(), unit=self.unit)
-
-  def __invert__(self):
-    return Array(self.value.__invert__(), unit=self.unit)
-
-  def _comparison(self, other, operator_str, operation):
-    is_scalar = is_scalar_type(other)
-    if not is_scalar and not isinstance(other, jnp.ndarray):
-      return NotImplemented
-    if not is_scalar or not jnp.isinf(other):
-      message = (
-          "Cannot perform comparison {value1} %s {value2}, units do not match"
-          % operator_str
-      )
-      fail_for_dimension_mismatch(self, other, message, value1=self, value2=other)
-    other = _check_input_array(other)
-    return operation(jnp.array(self.value, copy=False), jnp.array(other, copy=False))
-
-  def __eq__(self, oc):
-    return self._comparison(oc, "==", operator.eq)
-
-  def __ne__(self, oc):
-    return self._comparison(oc, "!=", operator.ne)
-
-  def __lt__(self, oc):
-    return self._comparison(oc, "<", operator.lt)
-
-  def __le__(self, oc):
-    return self._comparison(oc, "<=", operator.le)
-
-  def __gt__(self, oc):
-    return self._comparison(oc, ">", operator.gt)
-
-  def __ge__(self, oc):
-    return self._comparison(oc, ">=", operator.ge)
+      self.value = r.value
+      return self
+    return r
 
   def __add__(self, oc):
-    return self._binary_operation(
-      oc, operator.add, fail_for_mismatch=True, operator_str="+"
-    )
+    return self._binary_operation(oc, operator.add, fail_for_mismatch=True, operator_str="+")
 
   def __radd__(self, oc):
     return self.__add__(oc)
 
   def __iadd__(self, oc):
     # a += b
-    return self._binary_operation(
-      oc,
-      np.ndarray.__iadd__,
-      fail_for_mismatch=True,
-      operator_str="+=",
-      inplace=True,
-    )
+    return self._binary_operation(oc, operator.add, fail_for_mismatch=True, operator_str="+=", inplace=True)
 
   def __sub__(self, oc):
-    return self._binary_operation(
-      oc, operator.sub, fail_for_mismatch=True, operator_str="-"
-    )
+    return self._binary_operation(oc, operator.sub, fail_for_mismatch=True, operator_str="-")
 
   def __rsub__(self, oc):
-    # We allow operations with 0 even for dimension mismatches, e.g.
-    # 0 - 3*mV is allowed. In this case, the 0 is not represented by a
-    # Array object so we cannot simply call Array.__sub__
-    if (not isinstance(oc, Array) or oc.unit is DIMENSIONLESS) and jnp.all(
-        oc == 0
-    ):
-      return self.__neg__()
-    else:
-      return Array(oc, copy=False).__sub__(self)
+    return Array(oc).__sub__(self)
 
   def __isub__(self, oc):
     # a -= b
-    return self._binary_operation(
-      oc,
-      np.ndarray.__isub__,
-      fail_for_mismatch=True,
-      operator_str="-=",
-      inplace=True,
-    )
+    return self._binary_operation(oc, operator.sub, fail_for_mismatch=True, operator_str="-=", inplace=True)
 
   def __mul__(self, oc):
     return self._binary_operation(oc, operator.mul, operator.mul)
@@ -1637,9 +1504,7 @@ class Array(object):
 
   def __imul__(self, oc):
     # a *= b
-    return self._binary_operation(
-      oc, np.ndarray.__imul__, operator.mul, inplace=True
-    )
+    return self._binary_operation(oc, operator.mul, operator.mul, inplace=True)
 
   def __div__(self, oc):
     return self._binary_operation(oc, operator.truediv, operator.truediv)
@@ -1657,52 +1522,51 @@ class Array(object):
 
   def __itruediv__(self, oc):
     # a /= b
-    return self._binary_operation(
-      oc, np.ndarray.__itruediv__, operator.truediv, inplace=True
-    )
+    return self._binary_operation(oc, operator.truediv, operator.truediv, inplace=True)
 
   def __floordiv__(self, oc):
-    # Remove the unit from the result
-    if is_scalar_type(oc):
-      return Array(self.value // _check_input_array(oc))
-    else:
-      raise TypeError("Cannot perform floor division with non-scalar")
+    return self._binary_operation(oc, operator.floordiv, operator.truediv)
 
   def __rfloordiv__(self, oc):
-    # Remove the unit from the result
-    if is_scalar_type(oc):
-      return Array(_check_input_array(oc) // self.value)
-    else:
-      raise TypeError("Cannot perform floor division with non-scalar")
+    rdiv = lambda a, b: operator.truediv(b, a)
+    rfloordiv = lambda a, b: operator.truediv(b, a)
+    return self._binary_operation(oc, rfloordiv, rdiv)
 
   def __ifloordiv__(self, oc):
-    return self.__floordiv__(oc)
-
-  def __divmod__(self, oc):
-    # Remove the unit from the result
-    if is_scalar_type(oc):
-      return Array(self.value.__divmod__(_check_input_array(oc)))
-    else:
-      raise TypeError("Cannot perform divmod with non-scalar")
-
-  def __rdivmod__(self, oc):
-    # TODO
-    return NotImplemented
-    # return _return(self.value.__rdivmod__(_check_input_array(oc)))
+    # a //= b
+    return self._binary_operation(oc, operator.floordiv, operator.truediv, inplace=True)
 
   def __mod__(self, oc):
     return self._binary_operation(oc, operator.mod, fail_for_mismatch=True, operator_str=r"%")
 
   def __rmod__(self, oc):
-    # TODO
-    return NotImplemented
-    # return _return(_check_input_array(oc) % self.value)
+    oc = _check_input_array(oc)
+    return oc._binary_operation(self, operator.mod, fail_for_mismatch=True, operator_str=r"%")
 
   def __imod__(self, oc):
-    return self.__mod__(oc)
+    return self._binary_operation(oc, operator.mod, fail_for_mismatch=True, operator_str=r"%", inplace=True)
+
+  def __divmod__(self, oc):
+    return self.__floordiv__(oc), self.__mod__(oc)
+
+  def __rdivmod__(self, oc):
+    return self.__rfloordiv__(oc), self.__rmod__(oc)
+
+  def __matmul__(self, oc):
+    return self._binary_operation(oc, operator.matmul, operator.mul)
+
+  def __rmatmul__(self, oc):
+    oc = _check_input_array(oc)
+    return oc._binary_operation(self, operator.matmul, operator.mul)
+
+  def __imatmul__(self, oc):
+    # a @= b
+    raise NotImplementedError("In-place matrix multiplication is not supported")
+
+  # -------------------- #
 
   def __pow__(self, oc):
-    if isinstance(oc, jnp.ndarray) or is_scalar_type(oc):
+    if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)) or is_scalar_type(oc):
       fail_for_dimension_mismatch(
         oc,
         error_message=(
@@ -1714,196 +1578,154 @@ class Array(object):
         base=self,
         exponent=oc,
       )
-      other = jnp.array(oc.value, copy=False)
-      return Array(jnp.array(self.value, copy=False) ** other, unit=self.ndim ** other)
+      if isinstance(oc, Array):
+        oc = oc.value
+      return Array(jnp.array(self.value) ** oc, unit=self.unit ** oc)
     else:
-      return NotImplemented
+      return NotImplemented('Cannot calculate {base} ** {exponent}, the '
+                            'exponent has to be dimensionless'.format(base=self, exponent=oc))
 
   def __rpow__(self, oc):
     if self.is_dimensionless:
-      if isinstance(oc, jnp.ndarray) or isinstance(oc, jnp.ndarray):
-        new_array = jnp.array(oc.value, copy=False) ** jnp.array(self.value, copy=False)
-        return Array(new_array, unit=DIMENSIONLESS)
+      if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)):
+        return Array(oc ** self.value, unit=DIMENSIONLESS)
       else:
-        return NotImplemented
+        return oc.__pow__(self.value)
     else:
-      base = _short_str(oc)
-      exponent = _short_str(self)
-      raise DimensionMismatchError(
-        f"Cannot calculate {base} ** {exponent}, the base has to be dimensionless",
-        self.unit,
-      )
+      raise DimensionMismatchError(f"Cannot calculate {_short_str(oc)} ** {_short_str(self)}, "
+                                   f"the base has to be dimensionless",
+                                   self.unit)
 
   def __ipow__(self, oc):
     # a **= b
-    if isinstance(oc, jnp.ndarray) or is_scalar_type(oc):
-      fail_for_dimension_mismatch(
-        oc,
-        error_message=(
-          "Cannot calculate "
-          "... **= {exponent}, "
-          "the exponent has to be "
-          "dimensionless"
-        ),
-        base=self,
-        exponent=oc,
-      )
-      other = jnp.array(oc, copy=False)
-      self.value = self.value ** jnp.array(oc, copy=False)
-      self.unit = self.unit ** other
-      return self
-    else:
-      return NotImplemented
-
-  def __matmul__(self, oc):
-    return self._binary_operation(oc, operator.matmul, operator.mul)
-
-  def __rmatmul__(self, oc):
-    self.__matmul__(oc)
-
-  def __imatmul__(self, oc):
-    # a @= b
-    return self._binary_operation(
-      oc, np.ndarray.__imatmul__, operator.mul, inplace=True
-    )
+    raise NotImplementedError("In-place power is not supported")
 
   def __and__(self, oc):
     # Remove the unit from the result
-    return Array(self.value & _check_input_array(oc), unit=DIMENSIONLESS)
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __rand__(self, oc):
     # Remove the unit from the result
-    return Array(_check_input_array(oc) & self.value, unit=DIMENSIONLESS)
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __iand__(self, oc):
     # Remove the unit from the result
-    # a &= b
-    self.value = self.value & _check_input_array(oc)
-    self.unit = DIMENSIONLESS
-    return self
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __or__(self, oc):
     # Remove the unit from the result
-    return Array(self.value | _check_input_array(oc), unit=DIMENSIONLESS)
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __ror__(self, oc):
     # Remove the unit from the result
-    return Array(_check_input_array(oc) | self.value, unit=DIMENSIONLESS)
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __ior__(self, oc):
     # Remove the unit from the result
     # a |= b
-    self.value = self.value | _check_input_array(oc)
-    self.unit = DIMENSIONLESS
-    return self
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __xor__(self, oc):
     # Remove the unit from the result
-    return Array(self.value ^ _check_input_array(oc), unit=DIMENSIONLESS)
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __rxor__(self, oc):
     # Remove the unit from the result
-    return Array(_check_input_array(oc) ^ self.value, unit=DIMENSIONLESS)
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __ixor__(self, oc):
     # Remove the unit from the result
     # a ^= b
-    self.value = self.value ^ _check_input_array(oc)
-    self.unit = DIMENSIONLESS
-    return self
+    raise NotImplementedError("Bitwise operations are not supported")
 
   def __lshift__(self, oc):
-    # Remove the unit from the result
-    return Array(self.value << _check_input_array(oc), unit=DIMENSIONLESS)
+    if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)) or is_scalar_type(oc):
+      if isinstance(oc, Array):
+        oc = oc.value
+      return Array(self.value << oc, unit=self.unit)
+    else:
+      raise TypeError("Cannot calculate {value} << {shift}, the shift has "
+                      "to be dimensionless".format(value=self, shift=oc))
 
   def __rlshift__(self, oc):
-    # Remove the unit from the result
-    return Array(_check_input_array(oc) << self.value, unit=DIMENSIONLESS)
+    if self.is_dimensionless:
+      if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)):
+        return Array(oc << self.value, unit=DIMENSIONLESS)
+      elif isinstance(oc, Array):
+        return oc.__lshift__(self.value)
+      else:
+        raise TypeError("Cannot calculate {shift} << {value}, the value has "
+                        "to be dimensionless".format(value=self, shift=oc))
+    else:
+      raise DimensionMismatchError(f"Cannot calculate {_short_str(oc)} << {_short_str(self)}, "
+                                   f"the shift has to be dimensionless",
+                                   self.unit)
 
   def __ilshift__(self, oc):
-    # Remove the unit from the result
     # a <<= b
-    self.value = self.value << _check_input_array(oc)
-    self.unit = DIMENSIONLESS
+    r = self.__lshift__(oc)
+    self.value = r.value
     return self
 
   def __rshift__(self, oc):
-    # Remove the unit from the result
-    return Array(self.value >> _check_input_array(oc), unit=DIMENSIONLESS)
+    if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)) or is_scalar_type(oc):
+      if isinstance(oc, Array):
+        oc = oc.value
+      return Array(self.value >> oc, unit=self.unit)
+    else:
+      raise TypeError("Cannot calculate {value} >> {shift}, the shift has "
+                      "to be dimensionless".format(value=self, shift=oc))
 
   def __rrshift__(self, oc):
-    # Remove the unit from the result
-    return Array(_check_input_array(oc) >> self.value, unit=DIMENSIONLESS)
+    if self.is_dimensionless:
+      if isinstance(oc, (jax.Array, np.ndarray, numbers.Number)):
+        return Array(oc >> self.value, unit=DIMENSIONLESS)
+      elif isinstance(oc, Array):
+        return oc.__rshift__(self.value)
+      else:
+        raise TypeError("Cannot calculate {shift} >> {value}, the value has "
+                        "to be dimensionless".format(value=self, shift=oc))
+    else:
+      raise DimensionMismatchError(f"Cannot calculate {_short_str(oc)} >> {_short_str(self)}, "
+                                   f"the shift has to be dimensionless",
+                                   self.unit)
 
   def __irshift__(self, oc):
-    # Remove the unit from the result
     # a >>= b
-    self.value = self.value >> _check_input_array(oc)
-    self.unit = DIMENSIONLESS
+    r = self.__rshift__(oc)
+    self.value = r.value
     return self
 
   def __round__(self, ndigits=None):
     return Array(self.value.__round__(ndigits), unit=self.unit)
 
   def __reduce__(self):
-    return array_with_units, (jnp.array(self.value, copy=False), self.value.dtype, self.unit)
-
-  # ----------------------- #
-  #       JAX methods       #
-  # ----------------------- #
-
-  @property
-  def at(self):
-    return self.value.at
-
-  def block_host_until_ready(self, *args):
-    return self.value.block_host_until_ready(*args)
-
-  def block_until_ready(self, *args):
-    return self.value.block_until_ready(*args)
-
-  def device(self):
-    return self.value.device()
-
-  @property
-  def device_buffer(self):
-    return self.value.device_buffer
+    return array_with_units, (self.value, self.unit, self.value.dtype)
 
   # ----------------------- #
   #      NumPy methods      #
   # ----------------------- #
 
-  def all(self, axis=None, keepdims=False):
-    # Remove the unit from the result
-    """Returns True if all elements evaluate to True."""
-    r = self.value.all(axis=axis, keepdims=keepdims)
-    return Array(r, unit=DIMENSIONLESS)
+  all = wrap_function_remove_dimensions(jnp.all)
+  any = wrap_function_remove_dimensions(jnp.any)
+  nonzero = wrap_function_remove_dimensions(jnp.nonzero)
+  argmax = wrap_function_remove_dimensions(jnp.argmax)
+  argmin = wrap_function_remove_dimensions(jnp.argmin)
+  argsort = wrap_function_remove_dimensions(jnp.argsort)
 
-  def any(self, axis=None, keepdims=False):
-    # Remove the unit from the result
-    """Returns True if any of the elements of a evaluate to True."""
-    r = self.value.any(axis=axis, keepdims=keepdims)
-    return Array(r, unit=DIMENSIONLESS)
+  var = wrap_function_change_dimensions(jnp.var, lambda v, d: d ** 2)
 
-  def argmax(self, axis=None):
-    # Remove the unit from the result
-    """Return indices of the maximum values along the given axis."""
-    return Array(self.value.argmax(axis=axis), unit=DIMENSIONLESS)
-
-  def argmin(self, axis=None):
-    # Remove the unit from the result
-    """Return indices of the minimum values along the given axis."""
-    return Array(self.value.argmin(axis=axis), unit=DIMENSIONLESS)
-
-  def argpartition(self, kth, axis=-1, kind='introselect', order=None):
-    # Remove the unit from the result
-    """Returns the indices that would partition this array."""
-    return Array(self.value.argpartition(kth=kth, axis=axis, kind=kind, order=order), unit=DIMENSIONLESS)
-
-  def argsort(self, axis=-1, kind=None, order=None):
-    """Returns the indices that would sort this array."""
-    # Remove the unit from the result
-    return Array(self.value.argsort(axis=axis, kind=kind, order=order), unit=DIMENSIONLESS)
+  round = wrap_function_keep_dimensions(jnp.round)
+  std = wrap_function_keep_dimensions(jnp.std)
+  sum = wrap_function_keep_dimensions(jnp.sum)
+  trace = wrap_function_keep_dimensions(jnp.trace)
+  cumsum = wrap_function_keep_dimensions(jnp.cumsum)
+  diagonal = wrap_function_keep_dimensions(jnp.diagonal)
+  max = wrap_function_keep_dimensions(jnp.max)
+  mean = wrap_function_keep_dimensions(jnp.mean)
+  min = wrap_function_keep_dimensions(jnp.min)
+  ptp = wrap_function_keep_dimensions(jnp.ptp)
+  ravel = wrap_function_keep_dimensions(jnp.ravel)
 
   def astype(self, dtype):
     """Copy of the array, cast to a specified type.
@@ -1929,7 +1751,7 @@ class Array(object):
 
   def choose(self, choices, mode='raise'):
     """Use an index array to construct a new array from a set of choices."""
-    return Array(self.value.choose(choices=_as_jax_array_(choices), mode=mode), unit=self.unit, copy=True)
+    return Array(self.value.choose(choices=_as_jax_array_(choices), mode=mode), unit=self.unit)
 
   def clip(self, min=None, max=None, *args, **kwds):
     """Return an array whose values are limited to [min, max]. One of max or min must be given."""
@@ -1956,7 +1778,7 @@ class Array(object):
 
   def compress(self, condition, axis=None):
     """Return selected slices of this array along given axis."""
-    return Array(self.value.compress(condition=_as_jax_array_(condition), axis=axis), unit=self.unit, copy=True)
+    return Array(self.value.compress(condition=_as_jax_array_(condition), axis=axis), unit=self.unit)
 
   def conj(self):
     """Complex-conjugate all elements."""
@@ -1979,14 +1801,6 @@ class Array(object):
       )
     return Array(self.value.cumprod(axis=axis, dtype=dtype), unit=self.unit)
 
-  def cumsum(self, axis=None, dtype=None):
-    """Return the cumulative sum of the elements along the given axis."""
-    return Array(self.value.cumsum(axis=axis, dtype=dtype), unit=self.unit)
-
-  def diagonal(self, offset=0, axis1=0, axis2=1):
-    """Return specified diagonals."""
-    return Array(self.value.diagonal(offset=offset, axis1=axis1, axis2=axis2), unit=self.unit)
-
   def dot(self, b):
     """Dot product of two arrays."""
     return self._binary_operation(b, jnp.dot, operator.mul)
@@ -2002,25 +1816,6 @@ class Array(object):
   def item(self, *args):
     """Copy an element of an array to a standard Python scalar and return it."""
     return Array(self.value.item(*args), unit=self.unit)
-
-  def max(self, axis=None, keepdims=False, *args, **kwargs):
-    """Return the maximum along a given axis."""
-    res = self.value.max(axis=axis, keepdims=keepdims, *args, **kwargs)
-    return Array(res, unit=self.unit)
-
-  def mean(self, axis=None, dtype=None, keepdims=False, *args, **kwargs):
-    """Returns the average of the array elements along given axis."""
-    res = self.value.mean(axis=axis, dtype=dtype, keepdims=keepdims, *args, **kwargs)
-    return Array(res, unit=self.unit)
-
-  def min(self, axis=None, keepdims=False, *args, **kwargs):
-    """Return the minimum along a given axis."""
-    res = self.value.min(axis=axis, keepdims=keepdims, *args, **kwargs)
-    return Array(res, unit=self.unit)
-
-  def nonzero(self):
-    """Return the indices of the elements that are non-zero."""
-    return tuple(_return(a) for a in self.value.nonzero())
 
   def prod(self, *args, **kwds):
     """Return the product of the array elements over the given axis."""
@@ -2038,12 +1833,7 @@ class Array(object):
     # identical
     if dim_exponent.size > 1:
       dim_exponent = dim_exponent[0]
-    return Array(jnp.array(prod_res, copy=False), self.dim ** dim_exponent)
-
-  def ptp(self, axis=None, keepdims=False):
-    """Peak to peak (maximum - minimum) value along a given axis."""
-    r = self.value.ptp(axis=axis, keepdims=keepdims)
-    return Array(r, unit=self.unit)
+    return Array(jnp.array(prod_res), self.dim ** dim_exponent)
 
   def put(self, indices, values):
     """Replaces specified elements of an array with given values.
@@ -2058,10 +1848,6 @@ class Array(object):
     fail_for_dimension_mismatch(self, values, "put")
     self.__setitem__(indices, values)
 
-  def ravel(self, order=None):
-    """Return a flattened array."""
-    return Array(self.value.ravel(order=order), unit=self.unit)
-
   def repeat(self, repeats, axis=None):
     """Repeat elements of an array."""
     return Array(self.value.repeat(repeats=repeats, axis=axis), unit=self.unit)
@@ -2073,10 +1859,6 @@ class Array(object):
   def resize(self, new_shape):
     """Change shape and size of array in-place."""
     self.value = self.value.reshape(new_shape)
-
-  def round(self, decimals=0):
-    """Return ``a`` with each element rounded to the given number of decimals."""
-    return Array(self.value.round(decimals=decimals), unit=self.unit)
 
   def searchsorted(self, v, side='left', sorter=None):
     """Find indices where elements should be inserted to maintain order.
@@ -2140,54 +1922,6 @@ class Array(object):
     """Remove axes of length one from ``a``."""
     return Array(self.value.squeeze(axis=axis), unit=self.unit)
 
-  def std(self, axis=None, dtype=None, ddof=0, keepdims=False):
-    """Compute the standard deviation along the specified axis.
-
-    Returns the standard deviation, a measure of the spread of a distribution,
-    of the array elements. The standard deviation is computed for the
-    flattened array by default, otherwise over the specified axis.
-
-    Parameters
-    ----------
-    axis : None or int or tuple of ints, optional
-        Axis or axes along which the standard deviation is computed. The
-        default is to compute the standard deviation of the flattened array.
-        If this is a tuple of ints, a standard deviation is performed over
-        multiple axes, instead of a single axis or all the axes as before.
-    dtype : dtype, optional
-        Type to use in computing the standard deviation. For arrays of
-        integer type the default is float64, for arrays of float types it is
-        the same as the array type.
-    ddof : int, optional
-        Means Delta Degrees of Freedom.  The divisor used in calculations
-        is ``N - ddof``, where ``N`` represents the number of elements.
-        By default `ddof` is zero.
-    keepdims : bool, optional
-        If this is set to True, the axes which are reduced are left
-        in the result as dimensions with size one. With this option,
-        the result will broadcast correctly against the input array.
-
-        If the default value is passed, then `keepdims` will not be
-        passed through to the `std` method of sub-classes of
-        `ndarray`, however any non-default value will be.  If the
-        sub-class' method does not implement `keepdims` any
-        exceptions will be raised.
-
-    Returns
-    -------
-    standard_deviation : ndarray, see dtype parameter above.
-        If `out` is None, return a new array containing the standard deviation,
-        otherwise return a reference to the output array.
-    """
-    # Remove the unit from the result
-    r = self.value.std(axis=axis, dtype=dtype, ddof=ddof, keepdims=keepdims)
-    return Array(r, unit=self.unit)
-
-  def sum(self, axis=None, dtype=None, keepdims=False, initial=0, where=True):
-    """Return the sum of the array elements over the given axis."""
-    res = self.value.sum(axis=axis, dtype=dtype, keepdims=keepdims, initial=initial, where=where)
-    return Array(sum, unit=self.unit)
-
   def swapaxes(self, axis1, axis2):
     """Return a view of the array with `axis1` and `axis2` interchanged."""
     return Array(self.value.swapaxes(axis1, axis2), unit=self.unit)
@@ -2220,11 +1954,11 @@ class Array(object):
     sub-arrays : list of ndarrays
       A list of sub-arrays as views into `ary`.
     """
-    return [_return(a) for a in jnp.split(self.value, indices_or_sections, axis=axis)]
+    return [Array(a, unit=self.unit) for a in jnp.split(self.value, indices_or_sections, axis=axis)]
 
   def take(self, indices, axis=None, mode=None):
     """Return an array formed from the elements of a at the given indices."""
-    return _return(self.value.take(indices=_as_jax_array_(indices), axis=axis, mode=mode))
+    return Array(self.value.take(indices=indices, axis=axis, mode=mode), unit=self.unit)
 
   def tobytes(self):
     """Construct Python bytes containing the raw data bytes in the array.
@@ -2267,10 +2001,6 @@ class Array(object):
       return type(seq)(top_replace(seq))
 
     return replace_with_array(self.value.tolist(), self.unit)
-
-  def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
-    """Return the sum along diagonals of the array."""
-    return Array(self.value.trace(offset=offset, axis1=axis1, axis2=axis2, dtype=dtype), unit=self.unit)
 
   def transpose(self, *axes):
     """Returns a view of the array with axes transposed.
@@ -2335,11 +2065,6 @@ class Array(object):
     """
     return Array(self.value.tile(_as_jax_array_(reps)), unit=self.unit)
 
-  def var(self, axis=None, dtype=None, ddof=0, keepdims=False):
-    """Returns the variance of the array elements, along given axis."""
-    r = self.value.var(axis=axis, dtype=dtype, ddof=ddof, keepdims=keepdims)
-    return Array(r, unit=self.unit ** 2)
-
   def view(self, *args, dtype=None):
     r"""New view of array with the same data.
 
@@ -2370,7 +2095,7 @@ class Array(object):
 
     Example::
 
-        >>> x = brainpy.math.random.randn(4, 4)
+        >>> x = braincore.math.random.randn(4, 4)
         >>> x.size
        [4, 4]
         >>> y = x.view(16)
@@ -2380,7 +2105,7 @@ class Array(object):
         >>> z.size
         [2, 8]
 
-        >>> a = brainpy.math.random.randn(1, 2, 3, 4)
+        >>> a = braincore.math.random.randn(1, 2, 3, 4)
         >>> a.size
         [1, 2, 3, 4]
         >>> b = a.transpose(1, 2)  # Swaps 2nd and 3rd dimension
@@ -2389,7 +2114,7 @@ class Array(object):
         >>> c = a.view(1, 3, 2, 4)  # Does not change tensor layout in memory
         >>> c.size
         [1, 3, 2, 4]
-        >>> brainpy.math.equal(b, c)
+        >>> braincore.math.equal(b, c)
         False
 
 
@@ -2431,22 +2156,22 @@ class Array(object):
 
     Example::
 
-        >>> x = brainpy.math.random.randn(4, 4)
+        >>> x = braincore.math.random.randn(4, 4)
         >>> x
         Array([[ 0.9482, -0.0310,  1.4999, -0.5316],
                 [-0.1520,  0.7472,  0.5617, -0.8649],
                 [-2.4724, -0.0334, -0.2976, -0.8499],
                 [-0.2109,  1.9913, -0.9607, -0.6123]])
         >>> x.dtype
-        brainpy.math.float32
+        braincore.math.float32
 
-        >>> y = x.view(brainpy.math.int32)
+        >>> y = x.view(braincore.math.int32)
         >>> y
         tensor([[ 1064483442, -1124191867,  1069546515, -1089989247],
                 [-1105482831,  1061112040,  1057999968, -1084397505],
                 [-1071760287, -1123489973, -1097310419, -1084649136],
                 [-1101533110,  1073668768, -1082790149, -1088634448]],
-            dtype=brainpy.math.int32)
+            dtype=braincore.math.int32)
         >>> y[0, 0] = 1000000000
         >>> x
         tensor([[ 0.0047, -0.0310,  1.4999, -0.5316],
@@ -2454,15 +2179,15 @@ class Array(object):
                 [-2.4724, -0.0334, -0.2976, -0.8499],
                 [-0.2109,  1.9913, -0.9607, -0.6123]])
 
-        >>> x.view(brainpy.math.cfloat)
+        >>> x.view(braincore.math.cfloat)
         tensor([[ 0.0047-0.0310j,  1.4999-0.5316j],
                 [-0.1520+0.7472j,  0.5617-0.8649j],
                 [-2.4724-0.0334j, -0.2976-0.8499j],
                 [-0.2109+1.9913j, -0.9607-0.6123j]])
-        >>> x.view(brainpy.math.cfloat).size
+        >>> x.view(braincore.math.cfloat).size
         [4, 2]
 
-        >>> x.view(brainpy.math.uint8)
+        >>> x.view(braincore.math.uint8)
         tensor([[  0, 202, 154,  59, 182, 243, 253, 188, 185, 252, 191,  63, 240,  22,
                    8, 191],
                 [227, 165,  27, 190, 128,  72,  63,  63, 146, 203,  15,  63,  22, 106,
@@ -2470,8 +2195,8 @@ class Array(object):
                 [205,  59,  30, 192, 112, 206,   8, 189,   7,  95, 152, 190,  12, 147,
                   89, 191],
                 [ 43, 246,  87, 190, 235, 226, 254,  63, 111, 240, 117, 191, 177, 191,
-                  28, 191]], dtype=brainpy.math.uint8)
-        >>> x.view(brainpy.math.uint8).size
+                  28, 191]], dtype=braincore.math.uint8)
+        >>> x.view(braincore.math.uint8).size
         [4, 16]
 
     """
@@ -2514,41 +2239,29 @@ class Array(object):
     """Support ``numpy.array()`` and ``numpy.asarray()`` functions."""
     return np.asarray(self.value, dtype=dtype)
 
-  def __jax_array__(self):
-    return self.value
-
-  def as_variable(self):
-    """As an instance of Variable."""
-    global bm
-    if bm is None: from brainpy import math as bm
-    return bm.Variable(self)
-
-  def __bool__(self) -> bool:
-    return self.value.__bool__()
+  # def __bool__(self) -> bool:
+  #   return self.value.__bool__()
 
   def __float__(self):
     return self.value.__float__()
 
-  def __int__(self):
-    return self.value.__int__()
-
-  def __complex__(self):
-    return self.value.__complex__()
-
-  def __hex__(self):
-    assert self.ndim == 0, 'hex only works on scalar values'
-    return hex(self.value)  # type: ignore
-
-  def __oct__(self):
-    assert self.ndim == 0, 'oct only works on scalar values'
-    return oct(self.value)  # type: ignore
+  #
+  # def __int__(self):
+  #   return self.value.__int__()
+  #
+  # def __complex__(self):
+  #   return self.value.__complex__()
+  #
+  # def __hex__(self):
+  #   assert self.ndim == 0, 'hex only works on scalar values'
+  #   return hex(self.value)  # type: ignore
+  #
+  # def __oct__(self):
+  #   assert self.ndim == 0, 'oct only works on scalar values'
+  #   return oct(self.value)  # type: ignore
 
   def __index__(self):
     return operator.index(self.value)
-
-  def __dlpack__(self):
-    from jax.dlpack import to_dlpack  # pylint: disable=g-import-not-at-top
-    return to_dlpack(self.value)
 
   # ----------------------
   # PyTorch compatibility
@@ -2560,7 +2273,7 @@ class Array(object):
     equals
     Array.expand_dims(dim)
 
-    See :func:`brainpy.math.unsqueeze`
+    See :func:`braincore.math.unsqueeze`
     """
     return Array(jnp.expand_dims(self.value, dim), unit=self.unit)
 
@@ -2613,8 +2326,8 @@ class Array(object):
     """
     return Array(jnp.broadcast_to(self.value, array), unit=self.unit)
 
-  def pow(self, index: int):
-    return Array(self.value ** index, unit=self.unit ** index)
+  def pow(self, oc):
+    return self.__pow__(oc)
 
   def addr(
       self,
@@ -3023,9 +2736,9 @@ class Array(object):
 
   def uniform_(self, low=0., high=1.):
     # TODO: Not finish braincore.math yet
-    global bm
-    if bm is None: from braincore import math as bm
-    self.value = bm.random.uniform(low, high, self.shape)
+    global random
+    if random is None: from braincore import random
+    self.value = random.uniform(low, high, self.shape)
     return self
 
   def log_normal_(self, mean=1, std=2):
@@ -3042,27 +2755,28 @@ class Array(object):
       std: the standard deviation.
     """
     # TODO: Not finish braincore.math yet
-    global bm
-    if bm is None: from braincore import math as bm
-    self.value = bm.random.lognormal(mean, std, self.shape)
+    global random
+    if random is None: from braincore import random
+    self.value = random.lognormal(mean, std, self.shape)
     return self
 
   def normal_(self, ):
     """
     Fills self tensor with elements samples from the normal distribution parameterized by mean and std.
     """
-    # TODO: Not implement braincore.math yet
-    global bm
-    if bm is None: from braincore import math as bm
-    self.value = bm.random.randn(*self.shape)
+    global random
+    if random is None: from braincore import random
+    self.value = random.randn(*self.shape)
     return self
 
-  def cuda(self):
-    self.value = jax.device_put(self.value, jax.devices('cuda')[0])
+  def cuda(self, deice=None):
+    deice = jax.devices('cuda')[0] if deice is None else deice
+    self.value = jax.device_put(self.value, deice)
     return self
 
-  def cpu(self):
-    self.value = jax.device_put(self.value, jax.devices('cpu')[0])
+  def cpu(self, device=None):
+    device = jax.devices('cpu')[0] if device is None else device
+    self.value = jax.device_put(self.value, device)
     return self
 
   # dtype exchanging #
@@ -3085,10 +2799,6 @@ class Array(object):
 
   def double(self):
     return Array(jnp.asarray(self.value, dtype=jnp.float64), unit=self.unit)
-
-
-JaxArray = Array
-ndarray = Array
 
 
 class Unit(Array):
@@ -3186,7 +2896,7 @@ class Unit(Array):
   """
   __slots__ = ["_value", "_unit", "scale", "_dispname", "_name", "iscompound"]
 
-  __array_priority__ = 100
+  __array_priority__ = 1000
 
   automatically_register_units = True
 
@@ -3199,16 +2909,13 @@ class Unit(Array):
       dispname=None,
       iscompound=None,
       dtype=None,
-      copy=False,
   ):
     if unit is None:
       unit = DIMENSIONLESS
     if value != 10.0 ** scale:
-      raise AssertionError(
-        f"Unit value has to be 10**scale (scale={scale}, value={value})"
-      )
-    self._unit = unit
-    self._value = value
+      raise AssertionError(f"Unit value has to be 10**scale (scale={scale}, value={value})")
+    # self._unit = unit
+    # self._value = value
 
     # The scale for this unit (as the integer exponent of 10), i.e.
     # a scale of 3 means 10^3, for a "k" prefix.
@@ -3227,10 +2934,10 @@ class Unit(Array):
     # Whether this unit is a combination of other units
     self.iscompound = iscompound
 
+    super().__init__(value, dtype=dtype, unit=unit)
+
     if Unit.automatically_register_units:
       register_new_unit(self)
-
-    super().__init__(value, dtype=dtype, unit=unit, copy=copy)
 
   @staticmethod
   def create(unit, name, dispname, scale=0):
@@ -3495,7 +3202,7 @@ class UnitRegistry:
     if len(matching) == 0:
       raise KeyError("Unit not found in registry.")
 
-    matching_values = np.array(list(matching.keys()), copy=False)
+    matching_values = np.array(list(matching.keys()))
     print_opts = np.get_printoptions()
     edgeitems, threshold = print_opts["edgeitems"], print_opts["threshold"]
     if x.size > threshold:
@@ -3513,7 +3220,7 @@ class UnitRegistry:
         [x[use_slices].flatten() for use_slices in itertools.product(*slices)]
       )
     else:
-      x_flat = np.array(x, copy=False).flatten()
+      x_flat = np.array(x).flatten()
     floatreps = np.tile(np.abs(x_flat), (len(matching), 1)).T / matching_values
     # ignore zeros, they are well represented in any unit
     floatreps[floatreps == 0] = np.nan
@@ -3534,7 +3241,7 @@ def register_new_unit(u):
 
   Examples
   --------
-  >>> from brainpy.math.units import *
+  >>> from braincore.units import *
   >>> 2.0*farad/metre**2
   2. * metre ** -4 * kilogram ** -1 * second ** 4 * amp ** 2
   >>> register_new_unit(pfarad / mmetre**2)
@@ -3603,7 +3310,7 @@ def check_units(**au):
 
   Examples
   --------
-  >>> from brainpy.math.units import *
+  >>> from braincore.units import *
   >>> @check_units(I=amp, R=ohm, wibble=metre, result=volt)
   ... def getvoltage(I, R, **k):
   ...     return I*R
